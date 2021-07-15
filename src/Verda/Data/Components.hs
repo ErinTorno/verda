@@ -1,17 +1,6 @@
-module Verda.Component.Global
-    ( ClearColor(..)
-    , ShouldQuit(..)
-    , Time(..)
-    ) where
+module Verda.Data.Components where
 
 import Apecs
-
-import Verda.Graphics.Color (Color(..), black)
-
-newtype ClearColor = ClearColor {unClearColor :: Color} deriving (Eq, Ord, Read, Show)
-instance Semigroup ClearColor where (<>) = mappend
-instance Monoid    ClearColor where mempty = ClearColor black
-instance Component ClearColor where type Storage ClearColor = Global ClearColor
 
 newtype ShouldQuit = ShouldQuit {shouldQuit :: Bool} deriving (Eq, Ord, Read, Show)
 instance Semigroup ShouldQuit where (ShouldQuit a) <> (ShouldQuit b) = ShouldQuit $ a && b

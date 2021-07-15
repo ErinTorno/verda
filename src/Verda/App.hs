@@ -1,18 +1,19 @@
 module Verda.App where
 
-import           Apecs                   hiding (Map)
+import           Apecs                        hiding (Map)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Default
-import           Data.Map.Strict         (Map)
-import qualified Data.Map.Strict         as Map
-import           Data.Text               (Text)
+import           Data.Map.Strict              (Map)
+import qualified Data.Map.Strict              as Map
+import           Data.Text                    (Text)
 import           Data.Typeable
 import qualified SDL
 
 import           Verda.Asset
 import qualified Verda.Asset.Internal
-import           Verda.Component.Global
+import           Verda.Event.Control.Internal (mkControlState)
+import           Verda.Graphics.Texture
 import           Verda.World
 
 data App w s = App
@@ -30,8 +31,8 @@ makeApp :: MonadIO m => IO w -> m (App w ())
 makeApp = makeAppWith def
 
 makeAppWith :: MonadIO m => AssetSettings -> IO w -> m (App w ())
-makeAppWith settings mkWorld = App "Untitled App" (SDL.defaultWindow {SDL.windowGraphicsContext = SDL.VulkanContext}) mkWorld Map.empty Map.empty Map.empty ()
-    <$> emptyAssets settings
+makeAppWith settings mkWorld = App "Untitled App" (SDL.defaultWindow {SDL.windowGraphicsContext = SDL.VulkanContext}) mkWorld Map.empty Map.empty Map.empty () <$> assets
+    where assets = insertAssetLoader (TextureLoader @Texture) <$> emptyAssets settings
 
 -- Setup --
 
@@ -77,6 +78,7 @@ start app@App{..} = do
     runWith world $ do
         global $= appAssets
         global $= Time time 0
+        (global $=) =<< mkControlState
         newSt  <- runSystems appInitStateID appStartups app
         let loop s lastTime = do
                 newTime <- SDL.time

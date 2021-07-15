@@ -2,26 +2,42 @@
 
 module Verda.World
    ( VerdaWorld
+   , ShouldQuit(..)
+   , Time(..)
    , verdaWorldNames
    -- re-export
-   , module Verda.Component.Entity
-   , module Verda.Component.Global
+   , module Verda.Data.Components
+   , module Verda.Event.Components
+   , module Verda.Graphics.Components
    ) where
 
 import           Language.Haskell.TH.Syntax   (Name)
 
 import           Verda.Asset
-import           Verda.Component.Entity
-import           Verda.Component.Global
+import           Verda.Data.Components
+import           Verda.Event.Components
+import           Verda.Graphics.Components
 import           Verda.Util.Apecs
 
 type VerdaWorld w m = ReadWriteEach w m
-   '[ ClearColor, ShouldQuit, Time
-    , Assets, RenderPosition, Tint
+    -- Verda.Asset
+   '[ Assets
+    -- Verda.Data
+    , ShouldQuit, Time
+    -- Verda.Event
+    , ControlState, CursorMotionState
+    -- Verda.Graphics
+    , ClearColor, RenderPosition, Tint
     ]
 
 verdaWorldNames :: [Name]
 verdaWorldNames =
-   [ ''ClearColor, ''ShouldQuit, ''Time
-   , ''Assets, ''RenderPosition, ''Tint
+   -- Verda.Asset
+   [ ''Assets
+   -- Verda.Data
+   , ''ShouldQuit, ''Time
+   -- Verda.Event
+   , ''ControlState, ''CursorMotionState
+   -- Verda.Graphics
+   , ''ClearColor, ''RenderPosition, ''Tint
    ]

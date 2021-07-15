@@ -36,6 +36,7 @@ spec =
         insertAssetLoaderTest
         labeledTest
         loadHandleTest
+        loadSetSummaryTest
         updateWaitingTest
         withResourceTest
 
@@ -154,6 +155,31 @@ loadHandleTest =
             h1 <- loadHandle @_ @SimpleAsset assets simplePath
             h2 <- loadHandle @_ @SimpleAsset assets simplePath
             h2 `shouldBe` h1
+
+loadSetSummaryTest :: Spec
+loadSetSummaryTest =
+    describe "loadSetSummary" $ do
+        it "should report loaded for empty load sets" $ do
+            assets <- emptyAssets def
+            loadSetSummary assets (loadSet []) `shouldReturn` Loaded
+        it "should report failure if any elements fail" $ do
+            assets <- emptyAssets def
+            writeAssetStatus 0 Loaded assets
+            writeAssetStatus 1 (Failed "test") assets
+            let ls = loadSet [awaitHandle (Handle 0), awaitHandle (Handle 1)]
+            loadSetSummary assets ls `shouldReturn` Failed "test"
+        it "should report Loaded if all elements are Loaded" $ do
+            assets <- emptyAssets def
+            writeAssetStatus 0 Loaded assets
+            writeAssetStatus 1 Loaded assets
+            let ls = loadSet [awaitHandle (Handle 0), awaitHandle (Handle 1)]
+            loadSetSummary assets ls `shouldReturn` Loaded
+        it "should not be loaded if not all assets are finished" $ do
+            assets <- emptyAssets def
+            writeAssetStatus 0 Loaded assets
+            writeAssetStatus 1 Loading assets
+            let ls = loadSet [awaitHandle (Handle 0), awaitHandle (Handle 1)]
+            loadSetSummary assets ls `shouldReturn` Loading
 
 updateWaitingTest :: Spec
 updateWaitingTest =

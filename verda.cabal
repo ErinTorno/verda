@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5d34f00e90960efadf73b944770fc016fc8279820953b53699c2873bb93b459f
+-- hash: e2924c5cc173c69f2599c13ab018f2f550fc1903637e8c98c40056ffc963e909
 
 name:           verda
 version:        0.1.0.0
@@ -34,10 +34,12 @@ library
       Verda.Asset.Interop
       Verda.Asset.Path
       Verda.Asset.Types
-      Verda.Component.Entity
-      Verda.Component.Global
+      Verda.Data.Components
+      Verda.Event.Components
+      Verda.Event.Control
       Verda.Event.Control.Internal
       Verda.Graphics.Color
+      Verda.Graphics.Components
       Verda.Graphics.Texture
       Verda.Util.Apecs
       Verda.Util.Container
@@ -78,7 +80,7 @@ executable examples-shmup
   hs-source-dirs:
       examples/shmup
   default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -O0
+  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows -O0
   build-depends:
       apecs >=0.9 && <0.10
     , base >=4.7 && <5

@@ -60,6 +60,8 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -optl-mconsole
+    - -optl-mwindows
     - -O0
     dependencies:
     - verda

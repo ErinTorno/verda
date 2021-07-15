@@ -156,6 +156,9 @@ fromControllerButton btn = case btn of
     SDL.ControllerButtonDpadRight     -> ControllerButtonCode 15
 controllerButtonCount = 16
 
+fromJoystickID :: JoystickID -> InputCode
+fromJoystickID = JoystickCode
+
 mkJoystickState :: MonadIO m => m JoystickState
 mkJoystickState = liftIO $ JoystickState
     <$> UMVec.replicate joystickButtonCount 0
