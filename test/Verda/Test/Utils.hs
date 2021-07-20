@@ -5,8 +5,13 @@ import qualified Data.Foldable           as F
 import           Data.Map.Strict         (Map)
 import qualified Data.Map.Strict         as Map
 import qualified Data.Set                as Set
+import           Data.Text               (Text)
+import qualified Dhall                   as D
 import           Test.Hspec
 import qualified Test.HUnit              as HUnit
+
+failWith :: HasCallStack => String -> Expectation
+failWith = HUnit.assertFailure 
 
 ------------
 -- Assets --
@@ -16,7 +21,9 @@ shouldSatisfyNS :: HasCallStack => a -> (a -> Bool) -> Expectation
 shouldSatisfyNS v p = unless (p v) $ HUnit.assertFailure msg
     where msg = "predicate failed"
 
+---------
 -- Map --
+---------
 
 shouldHaveMember :: (HasCallStack, Ord k, Show k, Show a) => Map k a -> k -> Expectation
 shouldHaveMember m k = unless (Map.member k m) (HUnit.assertFailure msg)
@@ -37,3 +44,11 @@ shouldHaveMembersNS m keys = unless (expectedSet `Set.isSubsetOf` mapKeys) (HUni
     where msg         = concat ["no members ", show expectedSet, " in keys: ", show mapKeys]
           expectedSet = Set.fromList $ F.toList keys
           mapKeys     = Set.fromList $ Map.keys m
+
+-----------
+-- Dhall --
+-----------
+
+shouldDecodeTo :: (D.FromDhall a, Eq a, HasCallStack, Show a) => Text -> a -> Expectation
+shouldDecodeTo txt def = D.input D.auto txt `shouldReturn` def
+-- (D.autoWith D.defaultInputNormalizer)

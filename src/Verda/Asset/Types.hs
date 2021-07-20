@@ -9,6 +9,7 @@ import           Control.Monad.ST        (RealWorld)
 import           Data.ByteString         (ByteString)
 import qualified Data.ByteString         as BS
 import           Data.Default
+import qualified Dhall
 import           Data.Dynamic            (Dynamic)
 import           Data.Hashable
 import           Data.HashTable.ST.Basic (HashTable)
@@ -20,11 +21,14 @@ import           Data.String             (IsString)
 import           Data.Text               (Text)
 import           Data.Vector             (Vector)
 import           Data.Vector.Mutable     (IOVector)
+import           GHC.Generics
 import           Type.Reflection
 
-newtype Path = Path {unPath :: FilePath} deriving (Eq, Hashable, IsString, Ord, Read, Show)
+newtype Path = Path {unPath :: FilePath} deriving (Eq, Generic, Hashable, IsString, Ord, Read, Show)
+instance Dhall.FromDhall Path where
+    autoWith _ = Dhall.genericAutoWith (Dhall.defaultInterpretOptions {Dhall.singletonConstructors = Dhall.Bare})
 
-newtype Handle a = Handle {unHandle :: Int} deriving (Eq, Hashable, Ord, Read, Show)
+newtype Handle a = Handle {unHandle :: Int} deriving (Eq, Generic, Hashable, Ord, Read, Show)
 
 data AssetStatus
     = Failed String
@@ -37,7 +41,8 @@ data AssetStatus
     -- ^ The asset is loaded, but some of its dependencies might still be loading
     | Loaded
     -- ^ The asset and all its dependencies are loaded
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Read, Show)
+instance Dhall.FromDhall AssetStatus
 
 mostSevere :: AssetStatus -> AssetStatus -> AssetStatus
 mostSevere a b = if a <= b then a else b
@@ -56,7 +61,7 @@ data AssetSettings = AssetSettings
     -- ^ How long to wait after processing before we should try again (default 15)
     , readAssetFile   :: FilePath -> IO ByteString
     -- ^ How the asset files' bytes are loaded (default Data.ByteString.readFile)
-    }
+    } deriving (Generic)
 
 instance Default AssetSettings where
     def = AssetSettings
@@ -81,9 +86,9 @@ data Assets = Assets
     -- ^ A vector of statuses for assets with the given Handle index
     , handlesByPath   :: !(MVar (HashTable RealWorld Path (Handle ())))
     -- ^ A hashtable of asset paths to associated handles
-    , assetsToLoad    :: !(IORef (Seq (Int, AssetLoadFn Dynamic, AssetInfo)))
+    , assetsToLoad    :: !(IORef (Seq (Int, AssetLoadFn Dynamic, AssetInfo ())))
     -- ^ A sequence of tuples of (Handle index, loader function, asset info) to are awaiting loading
-    , assetsWaiting   :: !(IORef (Seq (Int, LoadedAsset Dynamic)))
+    , assetsWaiting   :: !(IORef (Seq (Int, Either (Handle ()) (LoadedAsset Dynamic))))
     -- ^ A sequence of tuples of (Handle index, loaded asset) that are loaded themselves, but might not have all their dependencies loaded
     }
 
@@ -100,28 +105,31 @@ data LabeledAsset = LabeledAsset
     -- ^ The asset in the form of a Dynamic
     }
 
-newtype Dependency = Depedency {unDependency :: Handle ()} deriving (Eq, Show)
+newtype Dependency = Depedency {unDependency :: Handle ()} deriving (Eq, Generic, Hashable, Read, Show)
 
-type LoadResult a = Either String (LoadedAsset a)
+data LoadResult a = LoadFailure String | LoadSuccess (LoadedAsset a) | HandleAlias (Handle a) deriving (Eq, Generic, Read, Show)
 
 data LoadedAsset a = LoadedAsset
     { asset         :: !a
     -- ^ The loaded asset
     , dependencies  :: !(Vector Dependency)
     -- ^ All dependent assets this asset and the assets required to be loaded before the asset itself can be considered loaded
-    } deriving (Eq, Show)
+    } deriving (Eq, Functor, Generic, Read, Show)
 
-newtype AssetInfo = AssetInfo {unAssetInfo :: Path} deriving (Eq, Ord, Show)
+data AssetInfo a = AssetInfo
+    { assetPath :: !Path
+    , assetHandle :: Handle a
+    } deriving (Eq, Generic, Ord, Read, Show)
 
-type AssetLoadFn a = AssetInfo -> ByteString -> LoadContext (LoadResult a)
+type AssetLoadFn a = AssetInfo a -> ByteString -> LoadContext (LoadResult a)
 
 class a `CanLoad` r where
     extensions :: Proxy (a r) -> Set Text
     loadAsset  :: Proxy (a r) -> AssetLoadFn r
 
-newtype LoadSetElement = LoadSetElement {unLoadSetElement :: Handle ()} deriving (Eq, Ord, Read, Show)
+newtype LoadSetElement = LoadSetElement {unLoadSetElement :: Handle ()} deriving (Eq, Generic, Ord, Read, Show)
 
-newtype AssetLoadSet = AssetLoadSet {unAssetLoadSet :: [LoadSetElement]} deriving (Eq, Ord, Read, Show)
+newtype AssetLoadSet = AssetLoadSet {unAssetLoadSet :: [LoadSetElement]} deriving (Eq, Generic, Ord, Read, Show)
 
 instance Default AssetLoadSet where
     def = AssetLoadSet []

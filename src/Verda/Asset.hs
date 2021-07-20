@@ -32,6 +32,8 @@ module Verda.Asset
     , loadHandle
     , loadSet
     , loadSetSummary
+    , simpleAlias
+    , simpleEither
     , simpleLoaded
     , simpleSuccess
     , simpleFailure

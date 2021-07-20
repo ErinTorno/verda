@@ -13,7 +13,7 @@ import qualified SDL
 import           Verda.Asset
 import qualified Verda.Asset.Internal
 import           Verda.Event.Control.Internal (mkControlState)
-import           Verda.Graphics.Texture
+import Verda.Graphics.Texture
 import           Verda.World
 
 data App w s = App
@@ -31,10 +31,18 @@ makeApp :: MonadIO m => IO w -> m (App w ())
 makeApp = makeAppWith def
 
 makeAppWith :: MonadIO m => AssetSettings -> IO w -> m (App w ())
-makeAppWith settings mkWorld = App "Untitled App" (SDL.defaultWindow {SDL.windowGraphicsContext = SDL.VulkanContext}) mkWorld Map.empty Map.empty Map.empty () <$> assets
-    where assets = insertAssetLoader (TextureLoader @Texture) <$> emptyAssets settings
+makeAppWith settings mkWorld = do
+    texQualOverrides <- mkTextureScaleQualityOverrides
+    assets <- insertLoaderResource ScaleLinear . insertLoaderResource texQualOverrides . insertAssetLoader (TextureLoader @Texture)
+               <$> emptyAssets settings
+    let conf = SDL.defaultWindow { SDL.windowGraphicsContext = SDL.VulkanContext
+                                 , SDL.windowInitialSize = fromIntegral <$> unWindowResolution def}
+    pure $ App "Untitled App" conf mkWorld Map.empty Map.empty Map.empty () assets
 
 -- Setup --
+
+updateWindowConfig :: (SDL.WindowConfig -> SDL.WindowConfig) -> App w s -> App w s
+updateWindowConfig f app = app {appWindowConfig = f (appWindowConfig app)}
 
 withTitle :: Text -> App w s -> App w s
 withTitle title app = app {appTitle = title}
@@ -74,9 +82,11 @@ start app@App{..} = do
     SDL.showWindow window
     void $ Verda.Asset.Internal.forkAssetLoader $ insertLoaderResource renderer appAssets
     world <- appWorld
+    res   <- SDL.get $ SDL.windowSize window
     time  <- SDL.time
     runWith world $ do
         global $= appAssets
+        global $= WindowResolution (fromIntegral <$> res)
         global $= Time time 0
         (global $=) =<< mkControlState
         newSt  <- runSystems appInitStateID appStartups app

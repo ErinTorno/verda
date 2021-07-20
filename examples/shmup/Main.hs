@@ -43,6 +43,7 @@ main = makeAppWith (def {assetFolder = "examples/assets"}) initExampleWorld >>= 
      . withStartup   Playing startGameState
      . withSystem    Playing setupGameObjects
      . withInitState Playing
+     . withLoaderResource ScaleNearest -- for best scaling of pixel sprites, we use Nearest scaling
 
 -- Systems --
 

@@ -5,7 +5,6 @@ module Verda.Asset.InternalSpec where
 import           Control.Monad.Reader
 import           Data.Text               (Text)
 import           Data.Default
-import           Data.Either
 import           Data.Dynamic
 import qualified Data.Foldable           as F
 import           Data.IORef
@@ -61,7 +60,7 @@ handleLoadResultTest =
         it "should write Failed on a Left err" $ do
             let msg = "Failed in test"
             assets <- makeAssets
-            handleLoadResult 0 (Left msg) assets
+            handleLoadResult 0 (simpleFailure msg) assets
             assetStatus assets handle `shouldReturn` Failed msg
             getAsset assets handle `shouldReturn` Nothing @Int
         it "should write Loaded on Right with no dependencies" $ do
@@ -74,7 +73,7 @@ handleLoadResultTest =
         it "should not write asset if it has dependencies" $ do
             let loadedAsset = LoadedAsset {asset = dynAsset, dependencies = Vec.fromList [dependency (Handle 1), dependency (Handle 2)]}
             assets <- makeAssets
-            handleLoadResult 0 (Right loadedAsset) assets
+            handleLoadResult 0 (LoadSuccess loadedAsset) assets
             assetStatus assets handle `shouldReturn` WaitingOnDependencies
             getAsset assets handle `shouldReturn` Nothing @Int
             waiting <- waitingAssets assets
@@ -113,7 +112,7 @@ labeledTest =
             intAsset = 12345 :: Int
         it "should write and mark loaded with no dependencies" $ do
             assets <- emptyAssets def
-            h      <- labeled' assets (AssetInfo "file.ext") "label" $ LoadedAsset {asset = intAsset, dependencies = Vec.empty}
+            h      <- labeled' assets "file.ext" "label" $ LoadedAsset {asset = intAsset, dependencies = Vec.empty}
             assetStatus assets h `shouldReturn` Loaded
             getAsset assets h `shouldReturn` Just intAsset
             waiting <- waitingAssets assets
@@ -121,7 +120,7 @@ labeledTest =
         it "shouldn't write and mark WaitingOnDependencies with dependencies" $ do
             let loaded    = LoadedAsset {asset = intAsset,       dependencies = Vec.singleton (dependency (Handle 1))}
             assets <- emptyAssets def
-            h      <- labeled' assets (AssetInfo "file.ext") "label" loaded
+            h      <- labeled' assets "file.ext" "label" loaded
             assetStatus assets h `shouldReturn` WaitingOnDependencies
             getAsset assets h `shouldReturn` Nothing
             waiting <- waitingAssets assets
@@ -141,7 +140,7 @@ loadHandleTest =
             case toLoad of
                 ((i, _, info) :<| Seq.Empty) -> do
                     i `shouldBe` 0
-                    info `shouldBe` AssetInfo simplePath
+                    info `shouldBe` AssetInfo simplePath (Handle 0)
                 _ -> expectationFailure $ "assetsToLoad should have 1, had " ++ show (Seq.length toLoad)
         it "should be Failed for missing loader" $ do
             assets <- emptyAssets def
@@ -193,7 +192,7 @@ updateWaitingTest =
                     writeAssetStatus dh s assets
                     pure dh
                 let la = LoadedAsset {asset = toDyn (12345 :: Int), dependencies = Vec.fromList (map (dependency . Handle) deps)}
-                atomicModifyIORef' (assetsWaiting assets) ((,()) . (|>(h, la)))
+                atomicModifyIORef' (assetsWaiting assets) ((,()) . (|>(h, Right la)))
                 assets `shouldHaveWaiting` Set.fromList [Handle h]
                 updateWaiting assets
                 a assets (Handle h)
@@ -218,18 +217,18 @@ withResourceTest =
             assets <- insertLoaderResource res <$> emptyAssets def
             result <- flip runReaderT assets . unContext . withResource $ \(i :: Int) ->
                 pure (simpleSuccess i)
-            result `shouldBe` Right (LoadedAsset res Vec.empty)
+            result `shouldBe` simpleSuccess res
         it "should report asset load failure if resource is missing" $ do
             assets <- emptyAssets def
             result <- flip runReaderT assets . unContext . withResource $ \(f :: Float) ->
                 pure (simpleSuccess f)
-            result `shouldSatisfy` isLeft
+            result `shouldSatisfy` (\case {LoadFailure _ -> True; _ -> False})
 
 -----------
 -- Utils --
 -----------
 
-waitingAssets :: Assets -> IO (Seq (Int, LoadedAsset Dynamic))
+waitingAssets :: Assets -> IO (Seq (Int, Either (Handle ()) (LoadedAsset Dynamic)))
 waitingAssets Assets{..} = readIORef assetsWaiting 
 
 shouldHaveWaiting :: Assets -> Set (Handle a) -> Expectation
@@ -270,9 +269,9 @@ data ComplexAsset = ComplexAsset
 data ComplexAssetLoader r = ComplexAssetLoader
 instance ComplexAssetLoader `CanLoad` ComplexAsset where
     extensions _ = Set.singleton complexExtension
-    loadAsset _ info@(AssetInfo path) bytes = do
+    loadAsset _ AssetInfo{..} bytes = do
         let ComplexAssetConfig{..} = read . T.unpack . T.decodeUtf8 $ bytes
-        simple1 <- getHandle $ Path.combine (Path.assetDirectory path) simpleAssetPath
-        simple2 <- labeled info "embedded" (simpleLoaded embeddedSimpleAsset)
-        pure . Right $ LoadedAsset { asset         = ComplexAsset {..}
-                                   , dependencies  = Vec.fromList [dependency simple1, dependency simple2] }
+        simple1 <- getHandle $ Path.combine (Path.assetDirectory assetPath) simpleAssetPath
+        simple2 <- labeled assetPath "embedded" (simpleLoaded embeddedSimpleAsset)
+        pure $ LoadSuccess $ LoadedAsset { asset         = ComplexAsset {..}
+                                         , dependencies  = Vec.fromList [dependency simple1, dependency simple2] }

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e2924c5cc173c69f2599c13ab018f2f550fc1903637e8c98c40056ffc963e909
+-- hash: a021e8de218bf18e0d41e2d982a413e189dd0642bbe40be162a4240ad51c757c
 
 name:           verda
 version:        0.1.0.0
@@ -38,6 +38,7 @@ library
       Verda.Event.Components
       Verda.Event.Control
       Verda.Event.Control.Internal
+      Verda.Event.Handler
       Verda.Graphics.Color
       Verda.Graphics.Components
       Verda.Graphics.Texture
@@ -69,6 +70,7 @@ library
     , sdl2-image >=2.0 && <2.1
     , template-haskell >=2.16 && <2.17
     , text >=1.2.4 && <1.3
+    , text-manipulate >=0.3 && <0.4
     , vector >=0.12 && <0.13
     , vector-th-unbox >=0.2 && <0.3
   default-language: Haskell2010
@@ -99,6 +101,7 @@ executable examples-shmup
     , sdl2-image >=2.0 && <2.1
     , template-haskell >=2.16 && <2.17
     , text >=1.2.4 && <1.3
+    , text-manipulate >=0.3 && <0.4
     , vector >=0.12 && <0.13
     , vector-th-unbox >=0.2 && <0.3
     , verda
@@ -121,7 +124,7 @@ test-suite verda-test
   hs-source-dirs:
       test
   default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows
+  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows -O0
   build-depends:
       HUnit >=1.6 && <1.7
     , apecs >=0.9 && <0.10
@@ -130,6 +133,7 @@ test-suite verda-test
     , containers >=0.6 && <0.7
     , data-default >=0.7 && <0.8
     , dhall >=1.39 && <1.40
+    , directory >=1.3.6 && <1.4
     , exceptions >=0.10 && <0.11
     , filepath >=1.4 && <1.5
     , hashable >=1.3 && <1.4
@@ -142,6 +146,7 @@ test-suite verda-test
     , sdl2-image >=2.0 && <2.1
     , template-haskell >=2.16 && <2.17
     , text >=1.2.4 && <1.3
+    , text-manipulate >=0.3 && <0.4
     , vector >=0.12 && <0.13
     , vector-th-unbox >=0.2 && <0.3
     , verda
