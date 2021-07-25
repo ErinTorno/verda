@@ -1,4 +1,4 @@
-.stack-work/
+.stack-work*
 *~
 unused/
 stack.yaml.lock

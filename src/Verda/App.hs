@@ -1,4 +1,17 @@
-module Verda.App where
+module Verda.App
+    ( App(..)
+    , makeApp
+    , makeAppWith
+    , start
+    , updateWindowConfig
+    , withTitle
+    , withAssetLoader
+    , withLoaderResource
+    , withInitState
+    , withStartup
+    , withFinalizer
+    , withSystem
+    ) where
 
 import           Apecs                        hiding (Map)
 import           Control.Monad
@@ -13,6 +26,7 @@ import qualified SDL
 import           Verda.Asset
 import qualified Verda.Asset.Internal
 import           Verda.Event.Control.Internal (mkControlState)
+import           Verda.Event.Handler          (handleEvents)
 import Verda.Graphics.Texture
 import           Verda.World
 
@@ -80,7 +94,8 @@ start app@App{..} = do
     window   <- SDL.createWindow appTitle appWindowConfig
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
     SDL.showWindow window
-    void $ Verda.Asset.Internal.forkAssetLoader $ insertLoaderResource renderer appAssets
+    void $ Verda.Asset.Internal.forkAssetLoader appAssets
+    --  $ insertLoaderResource renderer appAssets
     world <- appWorld
     res   <- SDL.get $ SDL.windowSize window
     time  <- SDL.time
@@ -88,9 +103,10 @@ start app@App{..} = do
         global $= appAssets
         global $= WindowResolution (fromIntegral <$> res)
         global $= Time time 0
-        (global $=) =<< mkControlState
+        set global =<< mkControlState
         newSt  <- runSystems appInitStateID appStartups app
         let loop s lastTime = do
+                handleEvents
                 newTime <- SDL.time
                 global  $= Time newTime (newTime - lastTime)
                 s'      <- runSystems s appSystems app

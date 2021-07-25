@@ -51,4 +51,3 @@ shouldHaveMembersNS m keys = unless (expectedSet `Set.isSubsetOf` mapKeys) (HUni
 
 shouldDecodeTo :: (D.FromDhall a, Eq a, HasCallStack, Show a) => Text -> a -> Expectation
 shouldDecodeTo txt def = D.input D.auto txt `shouldReturn` def
--- (D.autoWith D.defaultInputNormalizer)

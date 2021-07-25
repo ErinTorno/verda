@@ -67,11 +67,12 @@ data InputCode
     deriving (Eq, Read, Show)
 
 -- | Holds information about the cursor (usually mouse)
+-- | Position and movement is stored as pixels independent of the actual camera's dimensions
 data CursorMotionState = CursorMotionState
     { cursorScreenPosition :: !(V2 Int32)
-    , cursorPosition       :: !(V2 Double)
-    , cursorMovement       :: !(V2 Double)
-    , cursorScrollWheel    :: !Double      -- if scrolling isn't supported, should always be 0
+    , cursorPosition       :: !(V2 Float)
+    , cursorMovement       :: !(V2 Float)
+    , cursorScrollWheel    :: !Float      -- if scrolling isn't supported, should always be 0
     } deriving (Eq, Read, Show)
 
 instance Semigroup CursorMotionState where (<>) = mappend
@@ -190,8 +191,8 @@ getInputState ControlState{..} code = liftIO $ case code of
               | otherwise                        = pure BtnUnpressed
           fromHT idx ht = stToIO $ HT.lookup ht idx
 
-tickNextInputFrame :: MonadIO m => ControlState -> m ()
-tickNextInputFrame ControlState{..} = liftIO $ do
+stepNextInputFrame :: MonadIO m => ControlState -> m ()
+stepNextInputFrame ControlState{..} = liftIO $ do
     let update BtnPressed  = BtnHeld
         update BtnReleased = BtnUnpressed
         update e           = e

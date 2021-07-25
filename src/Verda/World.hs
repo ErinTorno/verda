@@ -27,7 +27,7 @@ type VerdaWorld w m = ReadWriteEach w m
     -- Verda.Event
     , ControlState, CursorMotionState
     -- Verda.Graphics
-    , ClearColor, RenderPosition, Tint, WindowResolution
+    , Camera, ClearColor, RenderPosition, Tint, WindowResolution
     ]
 
 verdaWorldNames :: [Name]
@@ -39,5 +39,5 @@ verdaWorldNames =
    -- Verda.Event
    , ''ControlState, ''CursorMotionState
    -- Verda.Graphics
-   , ''ClearColor, ''RenderPosition, ''Tint, ''WindowResolution
+   , ''Camera, ''ClearColor, ''RenderPosition, ''Tint, ''WindowResolution
    ]

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a021e8de218bf18e0d41e2d982a413e189dd0642bbe40be162a4240ad51c757c
+-- hash: 937065a47f76b44276ec72802a2edcc37d0931aee14baa81b515b45f7c8c377b
 
 name:           verda
 version:        0.1.0.0
@@ -39,11 +39,13 @@ library
       Verda.Event.Control
       Verda.Event.Control.Internal
       Verda.Event.Handler
+      Verda.Graphics.Camera
       Verda.Graphics.Color
       Verda.Graphics.Components
       Verda.Graphics.Texture
       Verda.Util.Apecs
       Verda.Util.Container
+      Verda.Util.Dhall
       Verda.Util.Template
       Verda.World
   other-modules:
@@ -51,7 +53,7 @@ library
   hs-source-dirs:
       src
   default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -O0
+  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns
   build-depends:
       apecs >=0.9 && <0.10
     , base >=4.7 && <5
@@ -82,7 +84,7 @@ executable examples-shmup
   hs-source-dirs:
       examples/shmup
   default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows -O0
+  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows
   build-depends:
       apecs >=0.9 && <0.10
     , base >=4.7 && <5
@@ -124,7 +126,7 @@ test-suite verda-test
   hs-source-dirs:
       test
   default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows -O0
+  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows
   build-depends:
       HUnit >=1.6 && <1.7
     , apecs >=0.9 && <0.10
