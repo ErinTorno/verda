@@ -60,8 +60,10 @@ data Texture = Texture
 data TextureLoader r = TextureLoader
 
 instance TextureLoader `CanLoad` Texture where
+    -- | True, as SDL.Renderer requires a single-threaded environment
+    isSingleThreadOnly _ = True
     extensions _ = validExtensions
-    loadAsset  _ AssetInfo{..} bytes = case  assetExtension assetPath of
+    loadAsset  _ AssetInfo{..} bytes = case assetExtension assetPath of
             "tex.dhall" -> do
                 parseFromDhall bytes >>= \case
                     Left err     -> pure $ simpleFailure err

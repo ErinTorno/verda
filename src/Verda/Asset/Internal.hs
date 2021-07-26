@@ -1,6 +1,7 @@
 module Verda.Asset.Internal where
 
 import           Control.Concurrent
+import           Control.Exception.Base  (SomeException, catch)
 import           Control.Monad.Reader
 import           Control.Monad.ST        (stToIO)
 import           Data.ByteString         (ByteString)
@@ -8,7 +9,6 @@ import           Data.Default
 import           Data.Dynamic
 import qualified Data.Foldable           as F
 import qualified Data.HashTable.ST.Basic as HT
-import           Data.IORef
 import qualified Data.Map.Strict         as Map
 import           Data.Proxy
 import           Data.Sequence           ((|>))
@@ -30,22 +30,23 @@ import           Verda.Util.Container    (growIfNeeded)
 
 emptyAssets :: MonadIO m => AssetSettings -> m Assets
 emptyAssets settings = liftIO $ Assets settings Map.empty Map.empty
-    <$> newIORef 0
+    <$> newMVar 0
     <*> (newMVar =<< MVec.new len)
     <*> (newMVar =<< MVec.new len)
     <*> (newMVar =<< stToIO (HT.newSized len))
-    <*> newIORef Seq.empty
-    <*> newIORef Seq.empty
+    <*> newMVar Seq.empty
+    <*> newMVar Seq.empty
+    <*> newMVar Seq.empty
     where len = defaultAssetLen settings
 
 -- Config --
 
 -- | Associates a new AssetLoader with the Assets
 -- | AssetLoaders with conflicting extensions will favor the most recently added AssetLoader
-insertAssetLoader :: (a `CanLoad` r, Typeable r) => a r -> Assets -> Assets
+insertAssetLoader :: (a `CanLoad` r, Typeable a, Typeable r) => a r -> Assets -> Assets
 insertAssetLoader loader assets@Assets{..} = assets {assetLoaders = Map.union newMap assetLoaders }
     where exts        = extensions proxy
-          newMap      = Map.fromSet (const loadfn) exts
+          newMap      = Map.fromSet (const (Loader (someTypeRep proxy) (isSingleThreadOnly proxy) loadfn)) exts
           loadfn      = mkDyn proxy (loadAsset proxy)
           mkDyn :: Typeable r => Proxy (a r) -> AssetLoadFn r -> AssetLoadFn Dynamic
           mkDyn _ f = let d (HandleAlias h)   = HandleAlias $ coerceHandle h
@@ -72,7 +73,7 @@ assocPathWithHandle path handle Assets{..} = liftIO $ do
 
 nextHandleIdx :: MonadIO m => Assets -> m Int
 nextHandleIdx Assets{..} = liftIO $ do
-    nextID <- atomicModifyIORef' nextHandleID $ \i -> (i + 1, i)
+    nextID <- modifyMVar nextHandleID $ \i -> pure (i + 1, i)
     -- grow the vectors if necessary
     takeMVar assetStatuses >>= growIfNeeded nextID 16 >>= putMVar assetStatuses
     takeMVar loadedAssets >>= growIfNeeded nextID 16 >>= putMVar loadedAssets
@@ -91,7 +92,8 @@ writeAssetStatus idx status Assets{..} = liftIO $ do
     putMVar assetStatuses statuses
 
 handleLoadResult :: MonadIO m => Int -> LoadResult Dynamic -> Assets -> m ()
-handleLoadResult idx (LoadFailure msg) assets = writeAssetStatus idx (Failed msg) assets
+handleLoadResult idx (LoadFailure msg) assets =
+    writeAssetStatus idx (Failed msg) assets
 handleLoadResult idx (LoadSuccess lr@LoadedAsset{..}) assets@Assets{..} = liftIO $ do
     status <- if Vec.null dependencies
               then do
@@ -99,7 +101,7 @@ handleLoadResult idx (LoadSuccess lr@LoadedAsset{..}) assets@Assets{..} = liftIO
                   MVec.write loaded idx (Just asset)
                   pure Loaded
               else do
-                  atomicModifyIORef' assetsWaiting ((,()) . (|>(idx, Right lr)))
+                  modifyMVar_ assetsWaiting (pure . (|>(idx, Right lr)))
                   pure WaitingOnDependencies
     writeAssetStatus idx status assets
 handleLoadResult idx (HandleAlias handle@(Handle h)) assets@Assets{..} = liftIO $ do
@@ -112,12 +114,12 @@ handleLoadResult idx (HandleAlias handle@(Handle h)) assets@Assets{..} = liftIO 
         value  <- MVec.read loadedVec h
         MVec.write loadedVec idx value
     else
-        atomicModifyIORef' assetsWaiting ((,()) . (|>(idx, Left (coerceHandle handle))))
+        modifyMVar_ assetsWaiting (pure . (|>(idx, Left (coerceHandle handle))))
 
 -- | Run checks to determine if asset's dependencies are finished loaded
 updateWaiting :: MonadIO m => Assets -> m ()
 updateWaiting assets@Assets{..} = liftIO $ do
-    waiting <- atomicModifyIORef' assetsWaiting (Seq.empty,)
+    waiting <- modifyMVar assetsWaiting (pure . (Seq.empty,))
     forM_ waiting $ \(idx, r) -> case r of 
         Left parHandle@(Handle parIdx) -> do
             status <- assetStatus assets parHandle
@@ -130,7 +132,7 @@ updateWaiting assets@Assets{..} = liftIO $ do
                     Nothing -> pure ()
                 writeAssetStatus idx status assets
             else
-                atomicModifyIORef' assetsWaiting $ (,()) . (|>(idx, Left parHandle))
+                modifyMVar_ assetsWaiting (pure . (|>(idx, Left parHandle)))
         Right la@LoadedAsset{..} -> do
             maxStatus <- foldM (\s (Depedency h) -> mostSevere s <$> assetStatus assets h) Loaded dependencies
             if isFinished maxStatus
@@ -138,11 +140,11 @@ updateWaiting assets@Assets{..} = liftIO $ do
                 writeAssetStatus idx maxStatus assets
                 writeAsset idx (Just asset) assets
             else
-                atomicModifyIORef' assetsWaiting $ (,()) . (|>(idx, Right la))
+                modifyMVar_ assetsWaiting (pure . (|>(idx, Right la)))
 
 forkAssetLoader :: MonadIO m => Assets -> m ThreadId
 forkAssetLoader assets@Assets{..} = liftIO . forkIO . forever $ do
-    toLoad <- atomicModifyIORef' assetsToLoad (Seq.empty,)
+    toLoad <- modifyMVar assetsToLoad (pure . (Seq.empty,))
     -- Run loaders
     forM_ toLoad $ \(idx, load, info@AssetInfo{..}) -> void . forkIO $ do
         bytes  <- readAssetFileBytes assets assetPath
@@ -150,6 +152,16 @@ forkAssetLoader assets@Assets{..} = liftIO . forkIO . forever $ do
         handleLoadResult idx result assets
     updateWaiting assets
     liftIO $ threadDelay (threadDelayMS assetSettings)
+
+updateSingleThreaded :: MonadIO m => Assets -> m ()
+updateSingleThreaded assets@Assets{..} = liftIO $ do
+    toLoad <- modifyMVar assetsToLoadSingThreaded (pure . (Seq.empty,))
+    forM_ toLoad $ \(idx, load, info@AssetInfo{..}) ->
+        let proc = do
+                bytes  <- readAssetFileBytes assets assetPath
+                result <- runReaderT (unContext $ load (coerceAssetInfo info) bytes) assets
+                handleLoadResult idx result assets
+         in proc `catch` (\(e :: SomeException) -> writeAssetStatus idx (Failed $ show e) assets)
 
 readAssetFileBytes :: Assets -> Path -> IO ByteString
 readAssetFileBytes Assets{..} = readAssetFile assetSettings . unPath . Path.addAssetDir (assetFolder assetSettings)
@@ -166,7 +178,6 @@ withResource action = withResourceMaybe $ \key -> \case
     Just r  -> action r
     Nothing -> pure . simpleFailure $ "Required missing asset resource of type " ++ show key
     
-
 withResourceOrDef :: (Default a, Typeable a) => (a -> LoadContext (LoadResult b)) -> LoadContext (LoadResult b)
 withResourceOrDef action = withResourceMaybe $ \_ -> \case
     Just r  -> action r
@@ -256,7 +267,7 @@ labeled path label la@LoadedAsset{..} = do
         else do
             writeAssetStatus nextID WaitingOnDependencies assets
             writeAsset nextID Nothing assets
-            atomicModifyIORef' (assetsWaiting assets) $ (,()) . (|>(nextID, Right $ la {asset = toDyn asset}))
+            modifyMVar_ (assetsWaiting assets) (pure . (|>(nextID, Right $ la {asset = toDyn asset})))
         pure (Handle nextID)
 
 loadHandle :: MonadIO m => Assets -> Path -> m (Handle a)
@@ -275,7 +286,8 @@ getHandleWith path action = do
             let ext       = Path.assetExtension path
             assets     <- ask
             loaderMap  <- asks assetLoaders
-            toLoadRef  <- asks assetsToLoad
+            toLoadMultRef <- asks assetsToLoad
+            toLoadSingRef <- asks assetsToLoadSingThreaded
             nextID <- liftIO $ do 
                 nextID <- nextHandleIdx assets
                 assocPathWithHandle path (Handle nextID) assets
@@ -284,8 +296,9 @@ getHandleWith path action = do
             liftIO $ do
                 status <- case Map.lookup ext loaderMap of
                     Nothing -> pure $ Failed $ "No loader for extension `" ++ T.unpack ext ++ "`"
-                    Just loader -> do
-                        atomicModifyIORef' toLoadRef ((,()) . (|>(nextID, loader, AssetInfo path $ Handle nextID)))
+                    Just Loader{..} -> do
+                        let loadRow = (nextID, loadFn, AssetInfo path $ Handle nextID)
+                        modifyMVar_ (if isSingleThreaded then toLoadSingRef else toLoadMultRef) (pure . (|>loadRow))
                         pure NotLoaded
                 writeAsset nextID Nothing assets
                 writeAssetStatus nextID status assets

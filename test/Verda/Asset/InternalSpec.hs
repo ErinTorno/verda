@@ -2,12 +2,12 @@
 
 module Verda.Asset.InternalSpec where
 
+import           Control.Concurrent.MVar
 import           Control.Monad.Reader
 import           Data.Text               (Text)
 import           Data.Default
 import           Data.Dynamic
 import qualified Data.Foldable           as F
-import           Data.IORef
 import qualified Data.Map.Strict         as Map
 import           Data.Sequence           (Seq((:<|)), (|>))
 import qualified Data.Sequence           as Seq
@@ -136,7 +136,7 @@ loadHandleTest =
             h `shouldBe` Handle 0
             assetStatus assets h `shouldReturn` NotLoaded
             getAsset assets h `shouldReturn` Nothing
-            toLoad <- readIORef (assetsToLoad assets)
+            toLoad <- readMVar (assetsToLoad assets)
             case toLoad of
                 ((i, _, info) :<| Seq.Empty) -> do
                     i `shouldBe` 0
@@ -147,7 +147,7 @@ loadHandleTest =
             h <- loadHandle @_ @SimpleAsset assets simplePath
             h `shouldBe` Handle 0
             assetStatus assets h `shouldReturn` Failed ("No loader for extension `" ++ T.unpack simpleExtension ++ "`")
-            toLoad <- readIORef (assetsToLoad assets)
+            toLoad <- readMVar (assetsToLoad assets)
             toLoad `shouldSatisfyNS` Seq.null
         it "shouldn't insert for existing asset" $ do
             assets <- insertAssetLoader loader <$> emptyAssets def
@@ -192,7 +192,7 @@ updateWaitingTest =
                     writeAssetStatus dh s assets
                     pure dh
                 let la = LoadedAsset {asset = toDyn (12345 :: Int), dependencies = Vec.fromList (map (dependency . Handle) deps)}
-                atomicModifyIORef' (assetsWaiting assets) ((,()) . (|>(h, Right la)))
+                modifyMVar_ (assetsWaiting assets) (pure . (|>(h, Right la)))
                 assets `shouldHaveWaiting` Set.fromList [Handle h]
                 updateWaiting assets
                 a assets (Handle h)
@@ -229,7 +229,7 @@ withResourceTest =
 -----------
 
 waitingAssets :: Assets -> IO (Seq (Int, Either (Handle ()) (LoadedAsset Dynamic)))
-waitingAssets Assets{..} = readIORef assetsWaiting 
+waitingAssets Assets{..} = readMVar assetsWaiting 
 
 shouldHaveWaiting :: Assets -> Set (Handle a) -> Expectation
 shouldHaveWaiting assets expected = do

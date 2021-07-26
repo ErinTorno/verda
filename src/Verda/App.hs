@@ -27,7 +27,7 @@ import           Verda.Asset
 import qualified Verda.Asset.Internal
 import           Verda.Event.Control.Internal (mkControlState)
 import           Verda.Event.Handler          (handleEvents)
-import Verda.Graphics.Texture
+import           Verda.Graphics.Texture
 import           Verda.World
 
 data App w s = App
@@ -61,7 +61,7 @@ updateWindowConfig f app = app {appWindowConfig = f (appWindowConfig app)}
 withTitle :: Text -> App w s -> App w s
 withTitle title app = app {appTitle = title}
 
-withAssetLoader :: (a `CanLoad` r, Typeable r) => a r -> App w s -> App w s
+withAssetLoader :: (a `CanLoad` r, Typeable a, Typeable r) => a r -> App w s -> App w s
 withAssetLoader loader app = app {appAssets = insertAssetLoader loader $ appAssets app}
 
 withLoaderResource :: Typeable a => a -> App w s -> App w s
@@ -91,11 +91,12 @@ withFinalizer st sys app = app {appFinalizers = Map.alter addFinalizer st (appFi
 start :: Ord s => (VerdaWorld w IO) => App w s -> IO ()
 start app@App{..} = do
     SDL.initializeAll
+    SDL.HintRenderScaleQuality SDL.$= SDL.ScaleLinear
     window   <- SDL.createWindow appTitle appWindowConfig
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
     SDL.showWindow window
-    void $ Verda.Asset.Internal.forkAssetLoader appAssets
-    --  $ insertLoaderResource renderer appAssets
+    let finAssets = insertLoaderResource renderer appAssets
+    void $ Verda.Asset.Internal.forkAssetLoader finAssets
     world <- appWorld
     res   <- SDL.get $ SDL.windowSize window
     time  <- SDL.time
@@ -106,6 +107,7 @@ start app@App{..} = do
         set global =<< mkControlState
         newSt  <- runSystems appInitStateID appStartups app
         let loop s lastTime = do
+                Verda.Asset.Internal.updateSingleThreaded finAssets
                 handleEvents
                 newTime <- SDL.time
                 global  $= Time newTime (newTime - lastTime)

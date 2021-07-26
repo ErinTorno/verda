@@ -13,7 +13,6 @@ import qualified Dhall
 import           Data.Dynamic            (Dynamic)
 import           Data.Hashable
 import           Data.HashTable.ST.Basic (HashTable)
-import           Data.IORef
 import           Data.Map.Strict         (Map)
 import           Data.Sequence           (Seq)
 import           Data.Set                (Set)
@@ -71,24 +70,32 @@ instance Default AssetSettings where
         , readAssetFile   = BS.readFile
         }
 
+data Loader = Loader
+    { loaderTypeRef    :: !SomeTypeRep
+    , isSingleThreaded :: !Bool
+    , loadFn           :: !(AssetLoadFn Dynamic)
+    }
+
 data Assets = Assets
-    { assetSettings   :: !AssetSettings
+    { assetSettings            :: !AssetSettings
     -- ^ The settings to use when loading assets
-    , assetLoaders    :: !(Map Text (AssetLoadFn Dynamic))
+    , assetLoaders             :: !(Map Text Loader)
     -- ^ A map of extensions to functions that can load that type of asset
-    , loaderResources :: !(Map SomeTypeRep Dynamic)
+    , loaderResources          :: !(Map SomeTypeRep Dynamic)
     -- ^ A map of SomeTypeReps to values that can be accessed by AssetLoaders
-    , nextHandleID    :: !(IORef Int)
+    , nextHandleID             :: !(MVar Int)
     -- ^ A counter of unique Handle IDs, starting at 0
-    , loadedAssets    :: !(MVar (IOVector (Maybe Dynamic)))
+    , loadedAssets             :: !(MVar (IOVector (Maybe Dynamic)))
     -- ^ A vector of assets, either empty as Nothing, or loaded as Just
-    , assetStatuses   :: !(MVar (IOVector AssetStatus))
+    , assetStatuses            :: !(MVar (IOVector AssetStatus))
     -- ^ A vector of statuses for assets with the given Handle index
-    , handlesByPath   :: !(MVar (HashTable RealWorld Path (Handle ())))
+    , handlesByPath            :: !(MVar (HashTable RealWorld Path (Handle ())))
     -- ^ A hashtable of asset paths to associated handles
-    , assetsToLoad    :: !(IORef (Seq (Int, AssetLoadFn Dynamic, AssetInfo ())))
-    -- ^ A sequence of tuples of (Handle index, loader function, asset info) to are awaiting loading
-    , assetsWaiting   :: !(IORef (Seq (Int, Either (Handle ()) (LoadedAsset Dynamic))))
+    , assetsToLoad             :: !(MVar (Seq (Int, AssetLoadFn Dynamic, AssetInfo ())))
+    -- ^ A sequence of tuples of (Handle index, loader function, asset info) that are awaiting loading
+    , assetsToLoadSingThreaded :: !(MVar (Seq (Int, AssetLoadFn Dynamic, AssetInfo ())))
+    -- ^ A sequence of tuples of (Handle index, loader function, asset info) that are awaiting loading in a single-threaded environment only
+    , assetsWaiting            :: !(MVar (Seq (Int, Either (Handle ()) (LoadedAsset Dynamic))))
     -- ^ A sequence of tuples of (Handle index, loaded asset) that are loaded themselves, but might not have all their dependencies loaded
     }
 
@@ -124,6 +131,9 @@ data AssetInfo a = AssetInfo
 type AssetLoadFn a = AssetInfo a -> ByteString -> LoadContext (LoadResult a)
 
 class a `CanLoad` r where
+    -- | True if asset can only be loaded in a singlethreaded environment
+    isSingleThreadOnly :: Proxy (a r) -> Bool
+    isSingleThreadOnly _ = False
     extensions :: Proxy (a r) -> Set Text
     loadAsset  :: Proxy (a r) -> AssetLoadFn r
 
