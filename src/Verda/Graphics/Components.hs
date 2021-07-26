@@ -2,6 +2,8 @@ module Verda.Graphics.Components
     ( Camera(..)
     , ClearColor(..)
     , RenderPosition(..)
+    , RenderTime(..)
+    , TargetRefreshRate(..)
     , Tint(..)
     , WindowResolution(..)
     ) where
@@ -12,6 +14,7 @@ import           Data.Hashable
 import           GHC.Generics
 import           Linear.V3
 
+import           Verda.Data.Components (Time(..))
 import           Verda.Graphics.Camera (Camera(..), WindowResolution(..))
 import           Verda.Graphics.Color  (Color(..), black, white)
 
@@ -27,6 +30,18 @@ instance Component RenderPosition where
     type Storage RenderPosition = Map RenderPosition
 instance Default RenderPosition where
     def = RenderPosition 0
+
+newtype RenderTime = RenderTime {unRenderTime :: Time} deriving (Eq, Ord, Read, Show)
+instance Semigroup RenderTime where (<>) = mappend
+instance Monoid    RenderTime where mempty = RenderTime mempty
+instance Component RenderTime where type Storage RenderTime = Global RenderTime
+
+newtype TargetRefreshRate = TargetRefreshRate {unTargetRefreshRate :: Float} deriving (Eq, Generic, Hashable, Ord, Read, Show)
+instance Semigroup TargetRefreshRate where (<>) = mappend
+instance Monoid    TargetRefreshRate where mempty = TargetRefreshRate 144.0
+instance Component TargetRefreshRate where type Storage TargetRefreshRate = Global TargetRefreshRate
+instance Default TargetRefreshRate where
+    def = mempty
 
 newtype Tint = Tint {unTint :: Color} deriving (Eq, Generic, Hashable, Ord, Read, Show)
 instance Component Tint where

@@ -22,23 +22,27 @@ import qualified Data.Map.Strict              as Map
 import           Data.Text                    (Text)
 import           Data.Typeable
 import qualified SDL
+import qualified SDL.Video.Vulkan          as SDL
 
 import           Verda.Asset
 import qualified Verda.Asset.Internal
 import           Verda.Event.Control.Internal (mkControlState)
 import           Verda.Event.Handler          (handleEvents)
+import           Verda.Graphics.Components
 import           Verda.Graphics.Texture
+import qualified Verda.System.Renderer        as System
 import           Verda.World
 
 data App w s = App
-    { appTitle         :: !Text
-    , appWindowConfig  :: !SDL.WindowConfig
-    , appWorld         :: !(IO w)
-    , appStartups      :: !(Map s [s -> SystemT w IO s])
-    , appSystems       :: !(Map s [s -> SystemT w IO s])
-    , appFinalizers    :: !(Map s [s -> SystemT w IO s])
-    , appInitStateID   :: !s
-    , appAssets        :: !Assets
+    { appTitle             :: !Text
+    , appWindowConfig      :: !SDL.WindowConfig
+    , appWorld             :: !(IO w)
+    , appStartups          :: !(Map s [s -> SystemT w IO s])
+    , appSystems           :: !(Map s [s -> SystemT w IO s])
+    , appFinalizers        :: !(Map s [s -> SystemT w IO s])
+    , appInitStateID       :: !s
+    , appAssets            :: !Assets
+    , appTargetRefreshRate :: !Float
     }
 
 makeApp :: MonadIO m => IO w -> m (App w ())
@@ -51,7 +55,7 @@ makeAppWith settings mkWorld = do
                <$> emptyAssets settings
     let conf = SDL.defaultWindow { SDL.windowGraphicsContext = SDL.VulkanContext
                                  , SDL.windowInitialSize = fromIntegral <$> unWindowResolution def}
-    pure $ App "Untitled App" conf mkWorld Map.empty Map.empty Map.empty () assets
+    pure $ App "Untitled App" conf mkWorld Map.empty Map.empty Map.empty () assets (unTargetRefreshRate def)
 
 -- Setup --
 
@@ -92,6 +96,9 @@ start :: Ord s => (VerdaWorld w IO) => App w s -> IO ()
 start app@App{..} = do
     SDL.initializeAll
     SDL.HintRenderScaleQuality SDL.$= SDL.ScaleLinear
+    let isVulkan = SDL.windowGraphicsContext appWindowConfig == SDL.VulkanContext
+    when isVulkan $
+        SDL.vkLoadLibrary Nothing
     window   <- SDL.createWindow appTitle appWindowConfig
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
     SDL.showWindow window
@@ -103,15 +110,17 @@ start app@App{..} = do
     runWith world $ do
         global $= appAssets
         global $= WindowResolution (fromIntegral <$> res)
-        global $= Time time 0
+        global $= Time 0 time
+        global $= TargetRefreshRate appTargetRefreshRate 
         set global =<< mkControlState
         newSt  <- runSystems appInitStateID appStartups app
         let loop s lastTime = do
-                Verda.Asset.Internal.updateSingleThreaded finAssets
                 handleEvents
                 newTime <- SDL.time
-                global  $= Time newTime (newTime - lastTime)
+                Verda.Asset.Internal.updateSingleThreaded finAssets
+                global  $= Time (newTime - lastTime) newTime
                 s'      <- runSystems s appSystems app
+                System.rendererSystem renderer
                 quit    <- shouldQuit <$> get global
                 unless quit $
                     loop s' newTime

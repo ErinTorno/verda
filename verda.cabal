@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 937065a47f76b44276ec72802a2edcc37d0931aee14baa81b515b45f7c8c377b
+-- hash: e0613d696e406ab0a54c6cf42939b190e9a25725e369c314c91b0256ca0abb52
 
 name:           verda
 version:        0.1.0.0
@@ -43,6 +43,7 @@ library
       Verda.Graphics.Color
       Verda.Graphics.Components
       Verda.Graphics.Texture
+      Verda.System.Renderer
       Verda.Util.Apecs
       Verda.Util.Container
       Verda.Util.Dhall

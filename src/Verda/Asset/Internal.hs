@@ -146,10 +146,12 @@ forkAssetLoader :: MonadIO m => Assets -> m ThreadId
 forkAssetLoader assets@Assets{..} = liftIO . forkIO . forever $ do
     toLoad <- modifyMVar assetsToLoad (pure . (Seq.empty,))
     -- Run loaders
-    forM_ toLoad $ \(idx, load, info@AssetInfo{..}) -> void . forkIO $ do
-        bytes  <- readAssetFileBytes assets assetPath
-        result <- runReaderT (unContext $ load (coerceAssetInfo info) bytes) assets
-        handleLoadResult idx result assets
+    let proc idx load info@AssetInfo{..} = void . forkIO $ do
+            bytes  <- readAssetFileBytes assets assetPath
+            result <- runReaderT (unContext $ load (coerceAssetInfo info) bytes) assets
+            handleLoadResult idx result assets
+        markFail idx (e :: SomeException) = writeAssetStatus idx (Failed $ show e) assets
+    forM_ toLoad $ \(idx, load, info) -> proc idx load info `catch` markFail idx
     updateWaiting assets
     liftIO $ threadDelay (threadDelayMS assetSettings)
 
