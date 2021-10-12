@@ -18,11 +18,13 @@ import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Vector             as Vec
 import qualified Data.Vector.Mutable     as MVec
+import           Say
 import           Type.Reflection
 
 import qualified Verda.Asset.Path        as Path
 import           Verda.Asset.Types
 import           Verda.Util.Container    (growIfNeeded)
+import           Verda.Util.Error        (sayErrAndExit)
 
 ------------
 -- Assets --
@@ -59,7 +61,7 @@ insertAssetLoader loader assets@Assets{..} = assets {assetLoaders = Map.union ne
 
 insertLoaderResource :: Typeable a => a -> Assets -> Assets
 insertLoaderResource val assets@Assets{..} = assets {loaderResources = Map.insert key (toDyn val) loaderResources}
-    where key     = resourceKey $ mkProxy val
+    where key     = someTypeRep $ mkProxy val
           mkProxy :: a -> Proxy a
           mkProxy = const Proxy
 
@@ -76,7 +78,7 @@ nextHandleIdx Assets{..} = liftIO $ do
     nextID <- modifyMVar nextHandleID $ \i -> pure (i + 1, i)
     -- grow the vectors if necessary
     takeMVar assetStatuses >>= growIfNeeded nextID 16 >>= putMVar assetStatuses
-    takeMVar loadedAssets >>= growIfNeeded nextID 16 >>= putMVar loadedAssets
+    takeMVar loadedAssets  >>= growIfNeeded nextID 16 >>= putMVar loadedAssets
     pure nextID
 
 writeAsset :: MonadIO m => Int -> Maybe Dynamic -> Assets -> m ()
@@ -151,7 +153,8 @@ forkAssetLoader assets@Assets{..} = liftIO . forkIO . forever $ do
             result <- runReaderT (unContext $ load (coerceAssetInfo info) bytes) assets
             handleLoadResult idx result assets
         markFail idx (e :: SomeException) = writeAssetStatus idx (Failed $ show e) assets
-    forM_ toLoad $ \(idx, load, info) -> proc idx load info `catch` markFail idx
+    forM_ toLoad $ \(idx, load, info) ->
+        proc idx load info `catch` markFail idx
     updateWaiting assets
     liftIO $ threadDelay (threadDelayMS assetSettings)
 
@@ -191,17 +194,18 @@ withResourceMaybe action = do
         mkProxy = const Proxy
         proxy   = mkProxy action
         key     = someTypeRep proxy
-        err (Dynamic rep _) = error $ concat [ "LoadResource was assigned to a key of the wrong type (was "
-                                             , show rep
-                                             , " but assigned as "
-                                             , show key
-                                             , "); This is a bug and should never happen"
-                                             ]
-    res <- asks loaderResources
-    action key . fmap (\r -> fromDyn r (err r)) $ Map.lookup key res
-
-resourceKey :: Typeable a => Proxy a -> SomeTypeRep
-resourceKey = someTypeRep
+        unDyn :: Typeable a => Dynamic -> LoadContext a
+        unDyn r@(Dynamic rep _) = case fromDynamic r of
+            Just res -> pure res
+            Nothing  -> sayErrAndExit $ T.concat [ "LoadResource was assigned to a key of the wrong type (was "
+                                                 , T.pack $ show rep
+                                                 , " but assigned as "
+                                                 , T.pack $ show key
+                                                 , "); This is a bug and should never happen"
+                                                 ]
+    Map.lookup key <$> asks loaderResources >>= \case
+        Just res -> unDyn res >>= action key . Just
+        Nothing  -> action key Nothing
 
 ----------------
 -- LoadResult --
@@ -297,7 +301,10 @@ getHandleWith path action = do
             action $ Handle nextID
             liftIO $ do
                 status <- case Map.lookup ext loaderMap of
-                    Nothing -> pure $ Failed $ "No loader for extension `" ++ T.unpack ext ++ "`"
+                    Nothing -> do
+                        let errMsg = "No loader for extension `" <> ext <> "`"
+                        sayErr errMsg
+                        pure $ Failed $ T.unpack errMsg
                     Just Loader{..} -> do
                         let loadRow = (nextID, loadFn, AssetInfo path $ Handle nextID)
                         modifyMVar_ (if isSingleThreaded then toLoadSingRef else toLoadMultRef) (pure . (|>loadRow))

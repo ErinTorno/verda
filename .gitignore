@@ -1,5 +1,6 @@
 .stack-work*
-*~
+./vulkan/
 unused/
+*~
 stack.yaml.lock
 test_summary.txt

@@ -130,7 +130,7 @@ insertBundleTest =
         it "should register a 12 bundle" $ do
             assets <- insertBundle (Proxy @MyBundle12) <$> emptyAssets def
             assets `shouldRegister` ["CompA", "CompB", "CompC", "CompD", "CompE", "CompF", "CompG", "CompH", "CompI", "CompJ", "CompK", "CompL"]
-        it "should register Bundled ())" $ do
+        it "should register Bundled ()" $ do
             assets <- insertBundle (Proxy @(Bundled ())) <$> emptyAssets def
             assets `shouldRegister` []
         it "should register Bundled Identity" $ do

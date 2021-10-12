@@ -25,14 +25,15 @@ dependencies:
 - bytestring       ^>=0.10
 - containers       ^>=0.6
 - data-default     ^>=0.7
-- dhall            ^>=1.39
 - exceptions       ^>=0.10
 - filepath         ^>=1.4
 - hashable         ^>=1.3
 - hashtables       ^>=1.2
 - linear           ^>=1.21
+- managed          ^>=1.0
 - mtl              ^>=2.2
 - primitive        ^>=0.7
+- say              ^>=0.1
 - sdl2             ^>=2.5
 - sdl2-image       ^>=2.0
 - text             ^>=1.2.4
@@ -40,6 +41,8 @@ dependencies:
 - template-haskell ^>=2.16
 - vector           ^>=0.12
 - vector-th-unbox  ^>=0.2
+- vulkan           ^>=3.11
+- vulkan-utils     ^>=0.5.1
 
 ghc-options:
 - -Wall
@@ -48,8 +51,23 @@ ghc-options:
 - -Wredundant-constraints
 - -Wincomplete-uni-patterns
 
+# flags:
+#   no-dhall:
+#     description: Do not depend on `dhall` or include dhall instances
+#     default:     false
+#     manual:      true
+
 library:
   source-dirs: src
+  dependencies:
+  - dhall ^>=1.39
+  # when:
+  # - condition: flag(no-dhall)
+  #   then:
+  #     cpp-options: -Dnodhall
+  #   else:
+  #     dependencies:
+  #     - dhall ^>=1.39
 
 executables:
   examples-shmup:
@@ -76,6 +94,7 @@ tests:
     - -optl-mwindows
     dependencies:
     - verda
+    - dhall            ^>=1.39
     - directory        ^>=1.3.6
     - hspec            ^>=2.7.8
     - HUnit            ^>=1.6

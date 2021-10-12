@@ -10,6 +10,7 @@ import Verda.App
 import Verda.Asset
 import Verda.Graphics.Color
 import Verda.Graphics.Texture
+import Verda.Util.Error        (sayErrStringAndExit)
 import Verda.World
 
 -- Components --
@@ -70,6 +71,6 @@ setupGameObjects stID = do
           when (isFinished summary) $ do
                modify global $ \gs -> gs {isInit = True}
                case summary of
-                    Failed err -> error err -- assets failed to load, so we kill the program with the summary of failed assets
+                    Failed err -> sayErrStringAndExit err -- assets failed to load, so we kill the program with the summary of failed assets
                     _          -> pure ()
      pure stID

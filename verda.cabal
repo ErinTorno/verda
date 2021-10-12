@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e0613d696e406ab0a54c6cf42939b190e9a25725e369c314c91b0256ca0abb52
+-- hash: 8d9084196238f40a00c30c567fab47a34d474652a16dd57d11b36ca54eccdd79
 
 name:           verda
 version:        0.1.0.0
@@ -42,40 +42,81 @@ library
       Verda.Graphics.Camera
       Verda.Graphics.Color
       Verda.Graphics.Components
+      Verda.Graphics.SDL
       Verda.Graphics.Texture
+      Verda.Graphics.Vulkan.Buffers
+      Verda.Graphics.Vulkan.Device
+      Verda.Graphics.Vulkan.GraphicsPipeline
+      Verda.Graphics.Vulkan.Internal
+      Verda.Graphics.Vulkan.RenderPass
+      Verda.Graphics.Vulkan.Shader
+      Verda.Graphics.Vulkan.Window
       Verda.System.Renderer
       Verda.Util.Apecs
       Verda.Util.Container
       Verda.Util.Dhall
+      Verda.Util.Error
+      Verda.Util.Logger
       Verda.Util.Template
       Verda.World
   other-modules:
       Paths_verda
   hs-source-dirs:
       src
-  default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
+  default-extensions:
+      BangPatterns
+      ConstraintKinds
+      DataKinds
+      DefaultSignatures
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      ExplicitForAll
+      FlexibleContexts
+      FlexibleInstances
+      GADTs
+      GeneralizedNewtypeDeriving
+      KindSignatures
+      LambdaCase
+      MultiParamTypeClasses
+      MultiWayIf
+      NamedFieldPuns
+      OverloadedLabels
+      OverloadedStrings
+      PatternSynonyms
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      TupleSections
+      TypeApplications
+      TypeFamilies
+      TypeOperators
   ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns
   build-depends:
-      apecs >=0.9 && <0.10
+      apecs ==0.9.*
     , base >=4.7 && <5
-    , bytestring >=0.10 && <0.11
-    , containers >=0.6 && <0.7
-    , data-default >=0.7 && <0.8
-    , dhall >=1.39 && <1.40
-    , exceptions >=0.10 && <0.11
-    , filepath >=1.4 && <1.5
-    , hashable >=1.3 && <1.4
-    , hashtables >=1.2 && <1.3
-    , linear >=1.21 && <1.22
-    , mtl >=2.2 && <2.3
-    , primitive >=0.7 && <0.8
-    , sdl2 >=2.5 && <2.6
-    , sdl2-image >=2.0 && <2.1
-    , template-haskell >=2.16 && <2.17
+    , bytestring ==0.10.*
+    , containers ==0.6.*
+    , data-default ==0.7.*
+    , dhall ==1.39.*
+    , exceptions ==0.10.*
+    , filepath ==1.4.*
+    , hashable ==1.3.*
+    , hashtables ==1.2.*
+    , linear ==1.21.*
+    , managed ==1.0.*
+    , mtl ==2.2.*
+    , primitive ==0.7.*
+    , say ==0.1.*
+    , sdl2 ==2.5.*
+    , sdl2-image ==2.0.*
+    , template-haskell ==2.16.*
     , text >=1.2.4 && <1.3
-    , text-manipulate >=0.3 && <0.4
-    , vector >=0.12 && <0.13
-    , vector-th-unbox >=0.2 && <0.3
+    , text-manipulate ==0.3.*
+    , vector ==0.12.*
+    , vector-th-unbox ==0.2.*
+    , vulkan ==3.11.*
+    , vulkan-utils >=0.5.1 && <0.6
   default-language: Haskell2010
 
 executable examples-shmup
@@ -84,30 +125,60 @@ executable examples-shmup
       Paths_verda
   hs-source-dirs:
       examples/shmup
-  default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
+  default-extensions:
+      BangPatterns
+      ConstraintKinds
+      DataKinds
+      DefaultSignatures
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      ExplicitForAll
+      FlexibleContexts
+      FlexibleInstances
+      GADTs
+      GeneralizedNewtypeDeriving
+      KindSignatures
+      LambdaCase
+      MultiParamTypeClasses
+      MultiWayIf
+      NamedFieldPuns
+      OverloadedLabels
+      OverloadedStrings
+      PatternSynonyms
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      TupleSections
+      TypeApplications
+      TypeFamilies
+      TypeOperators
   ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows
   build-depends:
-      apecs >=0.9 && <0.10
+      apecs ==0.9.*
     , base >=4.7 && <5
-    , bytestring >=0.10 && <0.11
-    , containers >=0.6 && <0.7
-    , data-default >=0.7 && <0.8
-    , dhall >=1.39 && <1.40
-    , exceptions >=0.10 && <0.11
-    , filepath >=1.4 && <1.5
-    , hashable >=1.3 && <1.4
-    , hashtables >=1.2 && <1.3
-    , linear >=1.21 && <1.22
-    , mtl >=2.2 && <2.3
-    , primitive >=0.7 && <0.8
-    , sdl2 >=2.5 && <2.6
-    , sdl2-image >=2.0 && <2.1
-    , template-haskell >=2.16 && <2.17
+    , bytestring ==0.10.*
+    , containers ==0.6.*
+    , data-default ==0.7.*
+    , exceptions ==0.10.*
+    , filepath ==1.4.*
+    , hashable ==1.3.*
+    , hashtables ==1.2.*
+    , linear ==1.21.*
+    , managed ==1.0.*
+    , mtl ==2.2.*
+    , primitive ==0.7.*
+    , say ==0.1.*
+    , sdl2 ==2.5.*
+    , sdl2-image ==2.0.*
+    , template-haskell ==2.16.*
     , text >=1.2.4 && <1.3
-    , text-manipulate >=0.3 && <0.4
-    , vector >=0.12 && <0.13
-    , vector-th-unbox >=0.2 && <0.3
+    , text-manipulate ==0.3.*
+    , vector ==0.12.*
+    , vector-th-unbox ==0.2.*
     , verda
+    , vulkan ==3.11.*
+    , vulkan-utils >=0.5.1 && <0.6
   default-language: Haskell2010
 
 test-suite verda-test
@@ -126,31 +197,62 @@ test-suite verda-test
       Paths_verda
   hs-source-dirs:
       test
-  default-extensions: BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveFoldable DeriveFunctor DeriveGeneric ExplicitForAll FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedLabels OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TupleSections TypeApplications TypeFamilies TypeOperators
+  default-extensions:
+      BangPatterns
+      ConstraintKinds
+      DataKinds
+      DefaultSignatures
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      ExplicitForAll
+      FlexibleContexts
+      FlexibleInstances
+      GADTs
+      GeneralizedNewtypeDeriving
+      KindSignatures
+      LambdaCase
+      MultiParamTypeClasses
+      MultiWayIf
+      NamedFieldPuns
+      OverloadedLabels
+      OverloadedStrings
+      PatternSynonyms
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      TupleSections
+      TypeApplications
+      TypeFamilies
+      TypeOperators
   ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows
   build-depends:
-      HUnit >=1.6 && <1.7
-    , apecs >=0.9 && <0.10
+      HUnit ==1.6.*
+    , apecs ==0.9.*
     , base >=4.7 && <5
-    , bytestring >=0.10 && <0.11
-    , containers >=0.6 && <0.7
-    , data-default >=0.7 && <0.8
-    , dhall >=1.39 && <1.40
+    , bytestring ==0.10.*
+    , containers ==0.6.*
+    , data-default ==0.7.*
+    , dhall ==1.39.*
     , directory >=1.3.6 && <1.4
-    , exceptions >=0.10 && <0.11
-    , filepath >=1.4 && <1.5
-    , hashable >=1.3 && <1.4
-    , hashtables >=1.2 && <1.3
+    , exceptions ==0.10.*
+    , filepath ==1.4.*
+    , hashable ==1.3.*
+    , hashtables ==1.2.*
     , hspec >=2.7.8 && <2.8
-    , linear >=1.21 && <1.22
-    , mtl >=2.2 && <2.3
-    , primitive >=0.7 && <0.8
-    , sdl2 >=2.5 && <2.6
-    , sdl2-image >=2.0 && <2.1
-    , template-haskell >=2.16 && <2.17
+    , linear ==1.21.*
+    , managed ==1.0.*
+    , mtl ==2.2.*
+    , primitive ==0.7.*
+    , say ==0.1.*
+    , sdl2 ==2.5.*
+    , sdl2-image ==2.0.*
+    , template-haskell ==2.16.*
     , text >=1.2.4 && <1.3
-    , text-manipulate >=0.3 && <0.4
-    , vector >=0.12 && <0.13
-    , vector-th-unbox >=0.2 && <0.3
+    , text-manipulate ==0.3.*
+    , vector ==0.12.*
+    , vector-th-unbox ==0.2.*
     , verda
+    , vulkan ==3.11.*
+    , vulkan-utils >=0.5.1 && <0.6
   default-language: Haskell2010

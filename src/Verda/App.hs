@@ -4,13 +4,14 @@ module Verda.App
     , makeAppWith
     , start
     , updateWindowConfig
-    , withTitle
     , withAssetLoader
-    , withLoaderResource
     , withInitState
-    , withStartup
     , withFinalizer
+    , withLoaderResource
+    , withTargetRefreshRate
+    , withStartup
     , withSystem
+    , withTitle
     ) where
 
 import           Apecs                        hiding (Map)
@@ -22,7 +23,6 @@ import qualified Data.Map.Strict              as Map
 import           Data.Text                    (Text)
 import           Data.Typeable
 import qualified SDL
-import qualified SDL.Video.Vulkan          as SDL
 
 import           Verda.Asset
 import qualified Verda.Asset.Internal
@@ -30,7 +30,8 @@ import           Verda.Event.Control.Internal (mkControlState)
 import           Verda.Event.Handler          (handleEvents)
 import           Verda.Graphics.Components
 import           Verda.Graphics.Texture
-import qualified Verda.System.Renderer        as System
+import qualified Verda.Graphics.Vulkan.Window as Vulkan
+import           Verda.Util.Logger            ()
 import           Verda.World
 
 data App w s = App
@@ -42,7 +43,8 @@ data App w s = App
     , appFinalizers        :: !(Map s [s -> SystemT w IO s])
     , appInitStateID       :: !s
     , appAssets            :: !Assets
-    , appTargetRefreshRate :: !Float
+    , appTargetRefreshRate :: !(Maybe Float)
+    , appTargetTickRate    :: !(Maybe Float) -- TODO implement
     }
 
 makeApp :: MonadIO m => IO w -> m (App w ())
@@ -55,7 +57,7 @@ makeAppWith settings mkWorld = do
                <$> emptyAssets settings
     let conf = SDL.defaultWindow { SDL.windowGraphicsContext = SDL.VulkanContext
                                  , SDL.windowInitialSize = fromIntegral <$> unWindowResolution def}
-    pure $ App "Untitled App" conf mkWorld Map.empty Map.empty Map.empty () assets (unTargetRefreshRate def)
+    pure $ App "Untitled App" conf mkWorld Map.empty Map.empty Map.empty () assets Nothing (Just 120)
 
 -- Setup --
 
@@ -89,43 +91,41 @@ withFinalizer st sys app = app {appFinalizers = Map.alter addFinalizer st (appFi
     where addFinalizer (Just l) = Just $ sys:l
           addFinalizer Nothing  = Just [sys]
 
+withTargetRefreshRate :: Maybe Float -> App w s -> App w s
+withTargetRefreshRate rate app = app {appTargetRefreshRate = rate}
+
 -- Running --
 
 -- | Starts the given app and runs its systems and asset loaders until the ShouldQuit global is True
 start :: Ord s => (VerdaWorld w IO) => App w s -> IO ()
-start app@App{..} = do
-    SDL.initializeAll
-    SDL.HintRenderScaleQuality SDL.$= SDL.ScaleLinear
-    let isVulkan = SDL.windowGraphicsContext appWindowConfig == SDL.VulkanContext
-    when isVulkan $
-        SDL.vkLoadLibrary Nothing
-    window   <- SDL.createWindow appTitle appWindowConfig
-    renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
-    SDL.showWindow window
-    let finAssets = insertLoaderResource renderer appAssets
+start app@App{..} = Vulkan.run appTitle appWindowConfig def $ \window@Vulkan.VulkanWindow{..} render -> do
+    targetRefreshRate <- case appTargetRefreshRate of
+        Just r  -> pure r
+        Nothing -> Vulkan.getDisplayModeRefreshRate window def
+    let finAssets = insertLoaderResource vwSDLRenderer appAssets
     void $ Verda.Asset.Internal.forkAssetLoader finAssets
     world <- appWorld
-    res   <- SDL.get $ SDL.windowSize window
+    res   <- SDL.get $ SDL.windowSize vwSDLWindow
     time  <- SDL.time
     runWith world $ do
         global $= appAssets
         global $= WindowResolution (fromIntegral <$> res)
         global $= Time 0 time
-        global $= TargetRefreshRate appTargetRefreshRate 
+        global $= TargetRefreshRate targetRefreshRate 
         set global =<< mkControlState
         newSt  <- runSystems appInitStateID appStartups app
-        let loop s lastTime = do
+        let loop s lastRenderTime lastTime = do
                 handleEvents
                 newTime <- SDL.time
                 Verda.Asset.Internal.updateSingleThreaded finAssets
                 global  $= Time (newTime - lastTime) newTime
                 s'      <- runSystems s appSystems app
-                System.rendererSystem renderer
+                TargetRefreshRate refreshRate <- get global
+                newRenderTime <- runIfReady refreshRate lastRenderTime (liftIO render)
                 quit    <- shouldQuit <$> get global
                 unless quit $
-                    loop s' newTime
-        loop newSt =<< SDL.time
-    SDL.quit
+                    loop s' newRenderTime newTime
+        loop newSt 0 =<< SDL.time
 
 runSystems :: Ord s => s -> Map s [s -> SystemT w IO s] -> App w s -> SystemT w IO s
 runSystems stID group App{..} = run stID (systems stID group)
@@ -138,3 +138,13 @@ runSystems stID group App{..} = run stID (systems stID group)
                   if   s' == s''
                   then run s' $ systems s' appStartups
                   else pure s''
+
+runIfReady :: Float -> Float -> SystemT w IO () -> SystemT w IO Float
+runIfReady cappingRatePerSec lastTime action
+    | cappingRatePerSec <= 0.0 = SDL.time
+    | otherwise = do
+        let delay = 1.0 / cappingRatePerSec
+        startTime <- SDL.time
+        if startTime - lastTime >= delay
+        then action >> SDL.time
+        else pure lastTime
