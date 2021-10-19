@@ -60,7 +60,8 @@ ghc-options:
 library:
   source-dirs: src
   dependencies:
-  - dhall ^>=1.39
+  - dhall    ^>=1.39
+  - fsnotify ^>=0.3
   # when:
   # - condition: flag(no-dhall)
   #   then:

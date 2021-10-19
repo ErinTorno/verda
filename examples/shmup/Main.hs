@@ -11,6 +11,7 @@ import Verda.Asset
 import Verda.Graphics.Color
 import Verda.Graphics.Texture
 import Verda.Util.Error        (sayErrStringAndExit)
+import Verda.Util.Logger
 import Verda.World
 
 -- Components --
@@ -39,17 +40,17 @@ data StateID = Playing deriving (Eq, Ord, Show)
 makeWorld "ExampleWorld" $ verdaWorldNames ++ [''GameState, ''Position, ''SpecialType]
 
 main :: IO ()
-main = makeAppWith (def {assetFolder = "examples/assets"}) initExampleWorld >>= start
+main = makeAppWith (def { assetFolder = "examples/assets", useHotReloading = True}) initExampleWorld >>= start
      . withTitle     "Example Shmup"
-     . withStartup   Playing startGameState
-     . withSystem    Playing setupGameObjects
+     . withStartup   Playing startPlayingState
+     . withSystem    Playing setupPlayingObjects
      . withInitState Playing
      . withLoaderResource ScaleNearest -- for best scaling of pixel sprites, we use Nearest scaling
 
 -- Systems --
 
-startGameState :: StateID -> SystemT ExampleWorld IO StateID
-startGameState stID = do
+startPlayingState :: StateID -> SystemT ExampleWorld IO StateID
+startPlayingState stID = do
      assets <- get global
      enemyTex        <- loadHandle assets "enemy.png" 
      enemyBulletTex  <- loadHandle assets "enemy_bullet.png" 
@@ -62,8 +63,8 @@ startGameState stID = do
      global $= ClearColor (mkRGBA 40 40 46 0)
      pure stID
 
-setupGameObjects :: StateID -> SystemT ExampleWorld IO StateID
-setupGameObjects stID = do
+setupPlayingObjects :: StateID -> SystemT ExampleWorld IO StateID
+setupPlayingObjects stID = do
      GameState{..} <- get global
      unless isInit $ do
           assets  <- get global
@@ -72,5 +73,5 @@ setupGameObjects stID = do
                modify global $ \gs -> gs {isInit = True}
                case summary of
                     Failed err -> sayErrStringAndExit err -- assets failed to load, so we kill the program with the summary of failed assets
-                    _          -> pure ()
+                    _          -> logLine Info "All assets finished!"
      pure stID

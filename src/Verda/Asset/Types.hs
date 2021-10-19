@@ -21,6 +21,7 @@ import           Data.Text               (Text)
 import           Data.Vector             (Vector)
 import           Data.Vector.Mutable     (IOVector)
 import           GHC.Generics
+import qualified System.FSNotify         as FSNotify
 import           Type.Reflection
 
 newtype Path = Path {unPath :: FilePath} deriving (Eq, Generic, Hashable, IsString, Ord, Read, Show)
@@ -60,6 +61,7 @@ data AssetSettings = AssetSettings
     -- ^ How long to wait after processing before we should try again (default 15)
     , readAssetFile   :: FilePath -> IO ByteString
     -- ^ How the asset files' bytes are loaded (default Data.ByteString.readFile)
+    , useHotReloading :: !Bool
     } deriving (Generic)
 
 instance Default AssetSettings where
@@ -68,6 +70,7 @@ instance Default AssetSettings where
         , defaultAssetLen = 64
         , threadDelayMS   = 15
         , readAssetFile   = BS.readFile
+        , useHotReloading = False
         }
 
 data Loader = Loader
@@ -97,6 +100,8 @@ data Assets = Assets
     -- ^ A sequence of tuples of (Handle index, loader function, asset info) that are awaiting loading in a single-threaded environment only
     , assetsWaiting            :: !(MVar (Seq (Int, Either (Handle ()) (LoadedAsset Dynamic))))
     -- ^ A sequence of tuples of (Handle index, loaded asset) that are loaded themselves, but might not have all their dependencies loaded
+    , assetsWaitingHotReloadWatching :: !(MVar (Seq HotReloadRequest))
+    , assetStopWatchingsByPath       :: !(MVar (HashTable RealWorld Path FSNotify.StopListening))
     }
 
 instance Semigroup Assets where (<>) = mappend
@@ -143,3 +148,8 @@ newtype AssetLoadSet = AssetLoadSet {unAssetLoadSet :: [LoadSetElement]} derivin
 
 instance Default AssetLoadSet where
     def = AssetLoadSet []
+
+data HotReloadRequest = HotReloadRequest
+    { hrrPath          :: !Path
+    , hrrIsMultiThread :: !Bool
+    }

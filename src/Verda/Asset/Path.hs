@@ -5,6 +5,7 @@ module Verda.Asset.Path
     , addLabel
     , assetDirectory
     , assetExtension
+    , assetFileName
     ) where
 
 import           Data.Char               (toLower)
@@ -36,3 +37,6 @@ assetDirectory (Path p) = Path $ FP.takeDirectory p
 
 assetExtension :: Path -> Text
 assetExtension (Path p) =  T.pack . drop 1 . map toLower . takeWhile (/=labelSeparator) . FP.takeExtensions $ p
+
+assetFileName :: Path -> FilePath
+assetFileName = FP.takeFileName . unPath

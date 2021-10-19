@@ -19,8 +19,10 @@ import qualified Data.Text               as T
 import qualified Data.Vector             as Vec
 import qualified Data.Vector.Mutable     as MVec
 import           Say
+import qualified System.FSNotify         as FSNotify
 import           Type.Reflection
 
+import           Verda.Asset.HotReload
 import qualified Verda.Asset.Path        as Path
 import           Verda.Asset.Types
 import           Verda.Util.Container    (growIfNeeded)
@@ -39,6 +41,8 @@ emptyAssets settings = liftIO $ Assets settings Map.empty Map.empty
     <*> newMVar Seq.empty
     <*> newMVar Seq.empty
     <*> newMVar Seq.empty
+    <*> newMVar Seq.empty
+    <*> (newMVar =<< stToIO (HT.newSized len))
     where len = defaultAssetLen settings
 
 -- Config --
@@ -145,16 +149,19 @@ updateWaiting assets@Assets{..} = liftIO $ do
                 modifyMVar_ assetsWaiting (pure . (|>(idx, Right la)))
 
 forkAssetLoader :: MonadIO m => Assets -> m ThreadId
-forkAssetLoader assets@Assets{..} = liftIO . forkIO . forever $ do
+forkAssetLoader assets@Assets{..} = liftIO . forkIO . FSNotify.withManager $ \fsManager -> forever $ do
     toLoad <- modifyMVar assetsToLoad (pure . (Seq.empty,))
     -- Run loaders
-    let proc idx load info@AssetInfo{..} = void . forkIO $ do
+    let proc idx load info@AssetInfo{..} = do
             bytes  <- readAssetFileBytes assets assetPath
             result <- runReaderT (unContext $ load (coerceAssetInfo info) bytes) assets
             handleLoadResult idx result assets
         markFail idx (e :: SomeException) = writeAssetStatus idx (Failed $ show e) assets
     forM_ toLoad $ \(idx, load, info) ->
-        proc idx load info `catch` markFail idx
+        void (forkIO $ proc idx load info) `catch` markFail idx
+    toWatch <- modifyMVar assetsWaitingHotReloadWatching (pure . (Seq.empty,))
+    forM_ toWatch $ \(HotReloadRequest path isMultiThreadSafe) ->
+        ensureHotReload assets fsManager path isMultiThreadSafe
     updateWaiting assets
     liftIO $ threadDelay (threadDelayMS assetSettings)
 
@@ -294,6 +301,7 @@ getHandleWith path action = do
             loaderMap  <- asks assetLoaders
             toLoadMultRef <- asks assetsToLoad
             toLoadSingRef <- asks assetsToLoadSingThreaded
+            toWatch       <- asks assetsWaitingHotReloadWatching
             nextID <- liftIO $ do 
                 nextID <- nextHandleIdx assets
                 assocPathWithHandle path (Handle nextID) assets
@@ -308,6 +316,7 @@ getHandleWith path action = do
                     Just Loader{..} -> do
                         let loadRow = (nextID, loadFn, AssetInfo path $ Handle nextID)
                         modifyMVar_ (if isSingleThreaded then toLoadSingRef else toLoadMultRef) (pure . (|>loadRow))
+                        modifyMVar_ toWatch (pure . (|> HotReloadRequest path (not isSingleThreaded)))
                         pure NotLoaded
                 writeAsset nextID Nothing assets
                 writeAssetStatus nextID status assets

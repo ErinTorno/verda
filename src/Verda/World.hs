@@ -18,6 +18,7 @@ import           Verda.Data.Components
 import           Verda.Event.Components
 import           Verda.Graphics.Components
 import           Verda.Util.Apecs
+import           Verda.Util.Logger
 
 type VerdaWorld w m = ReadWriteEach w m
     -- Verda.Asset
@@ -28,6 +29,8 @@ type VerdaWorld w m = ReadWriteEach w m
     , ControlState, CursorMotionState
     -- Verda.Graphics
     , Camera, ClearColor, RenderPosition, RenderTime, TargetRefreshRate, Tint, WindowResolution
+    -- Verda.Util
+    , Logger
     ]
 
 verdaWorldNames :: [Name]
@@ -40,4 +43,6 @@ verdaWorldNames =
    , ''ControlState, ''CursorMotionState
    -- Verda.Graphics
    , ''Camera, ''ClearColor, ''RenderPosition, ''RenderTime, ''TargetRefreshRate, ''Tint, ''WindowResolution
+    -- Verda.Util
+   , ''Logger
    ]

@@ -8,6 +8,7 @@ module Verda.App
     , withInitState
     , withFinalizer
     , withLoaderResource
+    , withLogger
     , withTargetRefreshRate
     , withStartup
     , withSystem
@@ -31,7 +32,7 @@ import           Verda.Event.Handler          (handleEvents)
 import           Verda.Graphics.Components
 import           Verda.Graphics.Texture
 import qualified Verda.Graphics.Vulkan.Window as Vulkan
-import           Verda.Util.Logger            ()
+import           Verda.Util.Logger            (Logger)
 import           Verda.World
 
 data App w s = App
@@ -45,6 +46,7 @@ data App w s = App
     , appAssets            :: !Assets
     , appTargetRefreshRate :: !(Maybe Float)
     , appTargetTickRate    :: !(Maybe Float) -- TODO implement
+    , appLogger            :: !Logger
     }
 
 makeApp :: MonadIO m => IO w -> m (App w ())
@@ -57,7 +59,7 @@ makeAppWith settings mkWorld = do
                <$> emptyAssets settings
     let conf = SDL.defaultWindow { SDL.windowGraphicsContext = SDL.VulkanContext
                                  , SDL.windowInitialSize = fromIntegral <$> unWindowResolution def}
-    pure $ App "Untitled App" conf mkWorld Map.empty Map.empty Map.empty () assets Nothing (Just 120)
+    pure $ App "Untitled App" conf mkWorld Map.empty Map.empty Map.empty () assets Nothing (Just 120) def
 
 -- Setup --
 
@@ -94,6 +96,9 @@ withFinalizer st sys app = app {appFinalizers = Map.alter addFinalizer st (appFi
 withTargetRefreshRate :: Maybe Float -> App w s -> App w s
 withTargetRefreshRate rate app = app {appTargetRefreshRate = rate}
 
+withLogger :: Logger -> App w s -> App w s
+withLogger logger app = app {appLogger = logger}
+
 -- Running --
 
 -- | Starts the given app and runs its systems and asset loaders until the ShouldQuit global is True
@@ -109,9 +114,10 @@ start app@App{..} = Vulkan.run appTitle appWindowConfig def $ \window@Vulkan.Vul
     time  <- SDL.time
     runWith world $ do
         global $= appAssets
+        global $= appLogger
         global $= WindowResolution (fromIntegral <$> res)
         global $= Time 0 time
-        global $= TargetRefreshRate targetRefreshRate 
+        global $= TargetRefreshRate targetRefreshRate
         set global =<< mkControlState
         newSt  <- runSystems appInitStateID appStartups app
         let loop s lastRenderTime lastTime = do
