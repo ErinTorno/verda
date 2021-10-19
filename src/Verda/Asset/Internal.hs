@@ -19,10 +19,10 @@ import qualified Data.Text               as T
 import qualified Data.Vector             as Vec
 import qualified Data.Vector.Mutable     as MVec
 import           Say
+import qualified System.FilePath         as FP
 import qualified System.FSNotify         as FSNotify
 import           Type.Reflection
 
-import           Verda.Asset.HotReload
 import qualified Verda.Asset.Path        as Path
 import           Verda.Asset.Types
 import           Verda.Util.Container    (growIfNeeded)
@@ -160,8 +160,8 @@ forkAssetLoader assets@Assets{..} = liftIO . forkIO . FSNotify.withManager $ \fs
     forM_ toLoad $ \(idx, load, info) ->
         void (forkIO $ proc idx load info) `catch` markFail idx
     toWatch <- modifyMVar assetsWaitingHotReloadWatching (pure . (Seq.empty,))
-    forM_ toWatch $ \(HotReloadRequest path isMultiThreadSafe) ->
-        ensureHotReload assets fsManager path isMultiThreadSafe
+    forM_ toWatch $ \(HotReloadRequest path handle isMultiThreadSafe) ->
+        ensureHotReload assets fsManager path handle isMultiThreadSafe
     updateWaiting assets
     liftIO $ threadDelay (threadDelayMS assetSettings)
 
@@ -180,6 +180,25 @@ readAssetFileBytes Assets{..} = readAssetFile assetSettings . unPath . Path.addA
 
 coerceAssetInfo :: AssetInfo a -> AssetInfo b
 coerceAssetInfo info@AssetInfo{..} = info {assetHandle = coerceHandle assetHandle}
+
+appendToLoad :: MonadIO m => Assets -> Handle a -> Path -> m ()
+appendToLoad assets@Assets{..} handle@(Handle handleID) path = liftIO $ do
+    let ext        = Path.assetExtension path
+        unitHandle = coerceHandle handle
+    status <- case Map.lookup ext assetLoaders of
+        Nothing -> do
+            let errMsg = "No loader for extension `" <> ext <> "`"
+            sayErr errMsg
+            pure $ Failed $ T.unpack errMsg
+        Just Loader{..} -> do
+            let loadRow = (handleID, loadFn, AssetInfo path unitHandle)
+            modifyMVar_
+                (if isSingleThreaded then assetsToLoadSingThreaded else assetsToLoad) (pure . (|>loadRow))
+            modifyMVar_ assetsWaitingHotReloadWatching
+                (pure . (|> HotReloadRequest path unitHandle (not isSingleThreaded)))
+            pure NotLoaded
+    writeAsset handleID Nothing assets
+    writeAssetStatus handleID status assets
 
 ---------------
 -- Resources --
@@ -296,31 +315,14 @@ getHandleWith path action = do
     (liftIO . stToIO $ HT.lookup handles path) >>= \case
         Just (Handle i) -> pure $ Handle i
         Nothing         -> do
-            let ext       = Path.assetExtension path
-            assets     <- ask
-            loaderMap  <- asks assetLoaders
-            toLoadMultRef <- asks assetsToLoad
-            toLoadSingRef <- asks assetsToLoadSingThreaded
-            toWatch       <- asks assetsWaitingHotReloadWatching
-            nextID <- liftIO $ do 
-                nextID <- nextHandleIdx assets
-                assocPathWithHandle path (Handle nextID) assets
-                pure nextID
-            action $ Handle nextID
-            liftIO $ do
-                status <- case Map.lookup ext loaderMap of
-                    Nothing -> do
-                        let errMsg = "No loader for extension `" <> ext <> "`"
-                        sayErr errMsg
-                        pure $ Failed $ T.unpack errMsg
-                    Just Loader{..} -> do
-                        let loadRow = (nextID, loadFn, AssetInfo path $ Handle nextID)
-                        modifyMVar_ (if isSingleThreaded then toLoadSingRef else toLoadMultRef) (pure . (|>loadRow))
-                        modifyMVar_ toWatch (pure . (|> HotReloadRequest path (not isSingleThreaded)))
-                        pure NotLoaded
-                writeAsset nextID Nothing assets
-                writeAssetStatus nextID status assets
-            pure $ Handle nextID
+            assets <- ask
+            handle <- liftIO $ do 
+                nextHandle <- Handle <$> nextHandleIdx assets
+                assocPathWithHandle path nextHandle assets
+                pure nextHandle
+            action handle
+            appendToLoad assets handle path
+            pure handle
 
 ------------------
 -- AssetLoadSet --
@@ -342,3 +344,24 @@ loadSetSummary assets = fmap (F.foldl' combineStatus Loaded) . mapM (assetStatus
                   Failed prevMsg -> Failed $ concat [prevMsg, "; ", msg]
                   _              -> Failed msg
               _          -> mostSevere acc s
+
+-------------------
+-- Hot Reloading --
+-------------------
+
+-- | If hot reloading is enabled, ensure that a watch is made for this asset now that it has started loading
+ensureHotReload :: MonadIO m => Assets -> FSNotify.WatchManager -> Path -> Handle () -> Bool -> m ()
+ensureHotReload assets@Assets{..} fsManager path handle _isMultiThread =
+    liftIO $ when (useHotReloading assetSettings) $ do
+        let watchDir = Path.addAssetDir (assetFolder assetSettings) (Path.assetDirectory path)
+        putStrLn ("ensureHotReload for " <> show path <> " for dir" <> show watchDir)
+        stopWatchings <- readMVar assetStopWatchingsByPath
+        stToIO (HT.lookup stopWatchings path) >>= \case
+            Just _  -> pure ()
+            Nothing ->
+                let predicate = \case
+                        FSNotify.Modified filePath _ _ -> FP.takeFileName filePath == Path.assetFileName path
+                        _ -> False
+                    onModify _ = appendToLoad assets handle path
+                in do stopWatching <- FSNotify.watchDir fsManager (unPath watchDir) predicate onModify -- ignore watcher cancel action for now
+                      stToIO (HT.insert stopWatchings path stopWatching)

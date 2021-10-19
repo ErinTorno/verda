@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 30c57d1c88bbddf50b6d61b2b5a133e785094132e38fe3aea8406ed230db1bf5
+-- hash: 060f4712cbc1cfa246b8e41dbc826c17324856f0512ca22f63adbc056d622d57
 
 name:           verda
 version:        0.1.0.0
@@ -30,7 +30,6 @@ library
       Verda.App
       Verda.Asset
       Verda.Asset.Bundle
-      Verda.Asset.HotReload
       Verda.Asset.Internal
       Verda.Asset.Interop
       Verda.Asset.Path

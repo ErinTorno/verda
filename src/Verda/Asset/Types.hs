@@ -151,5 +151,6 @@ instance Default AssetLoadSet where
 
 data HotReloadRequest = HotReloadRequest
     { hrrPath          :: !Path
+    , hrrHandle        :: !(Handle ())
     , hrrIsMultiThread :: !Bool
     }
