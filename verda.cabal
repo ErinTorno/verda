@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 060f4712cbc1cfa246b8e41dbc826c17324856f0512ca22f63adbc056d622d57
+-- hash: 2a4181380f4955cf7e58cc6fb723639cf36a4a8b64f1b4a5c15449febc87aadd
 
 name:           verda
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Verda.App
+      Verda.App.Internal
       Verda.Asset
       Verda.Asset.Bundle
       Verda.Asset.Internal
@@ -187,6 +188,7 @@ test-suite verda-test
   main-is: Main.hs
   other-modules:
       Spec
+      Verda.AppSpec
       Verda.Asset.BundleSpec
       Verda.Asset.InternalSpec
       Verda.Asset.PathSpec

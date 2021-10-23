@@ -64,15 +64,16 @@ instance TextureLoader `CanLoad` Texture where
     isSingleThreadOnly _ = True
     extensions _ = validExtensions
     loadAsset  _ AssetInfo{..} bytes = case assetExtension assetPath of
-            "tex.dhall" -> do
+            "tex.dhall" ->
                 parseFromDhall bytes >>= \case
-                    Left err     -> pure $ simpleFailure err
-                    Right TextureConfig{..} -> withResource $ \defQuality -> withResource $ \(TextureScaleQualityOverrides overrides) -> do
-                        tex <-
-                            if   texConScaleQuality == defQuality
-                            then getHandle texConFile
-                            else getHandleWith texConFile $ \handle -> liftIO $ stToIO $ HT.insert overrides handle texConScaleQuality
-                        pure $ simpleAlias tex
+                    Left err                -> pure $ simpleFailure err
+                    Right TextureConfig{..} ->
+                        withResource $ \defQuality -> withResource $ \(TextureScaleQualityOverrides overrides) -> do
+                            tex <-
+                                if   texConScaleQuality == defQuality
+                                then getHandle texConFile
+                                else getHandleWith texConFile $ \handle -> liftIO $ stToIO $ HT.insert overrides handle texConScaleQuality
+                            pure $ simpleAlias tex
             ext -> withResource $ \renderer -> withResource $ \scaleQuality -> withResource $ \(TextureScaleQualityOverrides overrides) ->
                 let -- tga needs special logic since it doesn't use a header
                     chooseDec :: a -> a -> a
