@@ -271,18 +271,24 @@ isValid assets h = getAsset assets h >>= \case
 
 -- | Fetches the asset associated with the handle if it is loaded
 getAsset :: (MonadIO m, Typeable a) => Assets -> Handle a -> m (Maybe a)
-getAsset Assets{..} (Handle idx) = liftIO $ do
-    loaded <- readMVar loadedAssets
-    asset  <- MVec.read loaded idx
-    pure (asset >>= fromDynamic)
+getAsset Assets{..} (Handle idx)
+    | idx < 0   = pure Nothing
+    | otherwise = liftIO $ do
+        loaded <- readMVar loadedAssets
+        if   idx >= MVec.length loaded
+        then pure Nothing
+        else do asset <- MVec.read loaded idx
+                pure (asset >>= fromDynamic)
 
 -- | Returns the status of the asset associated with the handle
 assetStatus :: MonadIO m => Assets -> Handle a -> m AssetStatus
-assetStatus Assets{..} (Handle i) = do
-    statuses   <- liftIO $ readMVar assetStatuses
-    if   MVec.length statuses < i
-    then pure NotLoaded
-    else liftIO $ MVec.read statuses i
+assetStatus Assets{..} (Handle idx)
+    | idx < 0   = pure NotLoaded
+    | otherwise = do
+        statuses   <- liftIO $ readMVar assetStatuses
+        if   idx >= MVec.length statuses
+        then pure NotLoaded
+        else liftIO $ MVec.read statuses idx
 
 -- | Associates the given asset with the parent path and a label, and returns a Handle to that asset
 -- > labeled (AssetInfo "dir/file.ext") "sub" (LoadedAsset 123 Data.Vector.empty)
@@ -302,12 +308,15 @@ labeled path label la@LoadedAsset{..} = do
             modifyMVar_ (assetsWaiting assets) (pure . (|>(nextID, Right $ la {asset = toDyn asset})))
         pure (Handle nextID)
 
+-- | Start loading an asset from the path if not already loaded, and return its handle
 loadHandle :: MonadIO m => Assets -> Path -> m (Handle a)
 loadHandle assets path = liftIO $ runReaderT (unContext $ getHandle path) assets
 
+-- | Gets a handle associated with this path
 getHandle :: Path -> LoadContext (Handle a)
 getHandle path = getHandleWith path (\_ -> pure ())
 
+-- | Gets a handle associated with this path, running an action if its not already loaded
 getHandleWith :: Path -> (Handle a -> LoadContext ()) -> LoadContext (Handle a)
 getHandleWith path action = do
     handlesMVar <- asks handlesByPath
@@ -331,12 +340,15 @@ getHandleWith path action = do
 -- usage: let ls = loadSet [awaitHandle h1, awaitHandle h2, awaitHandle h3]
 --        when (isFinished (loadSetSummary assets ls)) $ do
 
+-- | Creates a LoadSet from a collection of elements
 loadSet :: Foldable t => t LoadSetElement -> AssetLoadSet
 loadSet = AssetLoadSet . F.toList . F.foldr' Set.insert Set.empty
 
+-- | Creates a LoadSetElement for the given handle
 awaitHandle :: Handle a -> LoadSetElement
 awaitHandle = LoadSetElement . coerceHandle
 
+-- | Determine a summary of the statuses of all handles in a LoadSet
 loadSetSummary :: MonadIO m => Assets -> AssetLoadSet -> m AssetStatus
 loadSetSummary assets = fmap (F.foldl' combineStatus Loaded) . mapM (assetStatus assets . unLoadSetElement) . unAssetLoadSet
     where combineStatus acc s = case s of

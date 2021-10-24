@@ -22,6 +22,7 @@ module Verda.Event.Control
     , getJoystickBall
     , getJoystickHat
     , isPressedOrHeld
+    , whenInput
     ) where
 
 import Verda.Event.Control.Internal

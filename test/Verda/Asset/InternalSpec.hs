@@ -42,9 +42,10 @@ spec =
 assetStatusTest :: Spec
 assetStatusTest =
     describe "assetStatus" $ do
-        it "should return NotLoaded for invalid handles" $ do
+        it "should return NotLoaded for handles outside of loaded range" $ do
             assets <- emptyAssets def
-            assetStatus assets (Handle 123) `shouldReturn` NotLoaded
+            assetStatus assets (Handle (-1)) `shouldReturn` NotLoaded
+            assetStatus assets (Handle 123)  `shouldReturn` NotLoaded
         it "should return for a valid index" $ do
             assets <- emptyAssets def
             writeAssetStatus 0 Loaded assets

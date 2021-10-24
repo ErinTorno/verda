@@ -43,6 +43,8 @@ instance Component GameState where type Storage GameState = Global GameState
 
 data StateID = Playing deriving (Eq, Ord, Show)
 
+-- Creates the ECS world, including the type ExampleWorld for accessing all these components
+-- and the function initExampleWorld for creating the initial state of the world
 makeWorld "ExampleWorld" $ verdaWorldNames ++ [''GameState, ''Position, ''Bullet, ''Enemy, ''Player]
 
 type SystemT' = SystemT ExampleWorld IO
@@ -92,14 +94,12 @@ handleInput :: StateID -> SystemT' StateID
 handleInput stID = do
      Time dt _ <- get global
      input     <- get global
-     let ifUsed code action = getInputState input (fromScanCode code) >>= \inputSt ->
-             if isPressedOrHeld inputSt then action else pure ()
-     ifUsed SDL.ScancodeW $
+     whenInput input (fromScanCode SDL.ScancodeW) isPressedOrHeld $
           cmap $ \(Player, Position x y) -> Position x (y - playerSpeedPPS * dt)
-     ifUsed SDL.ScancodeA $
+     whenInput input (fromScanCode SDL.ScancodeA) isPressedOrHeld $
           cmap $ \(Player, Position x y) -> Position (x - playerSpeedPPS * dt) y
-     ifUsed SDL.ScancodeS $
+     whenInput input (fromScanCode SDL.ScancodeS) isPressedOrHeld $
           cmap $ \(Player, Position x y) -> Position x (y + playerSpeedPPS * dt)
-     ifUsed SDL.ScancodeD $
+     whenInput input (fromScanCode SDL.ScancodeD) isPressedOrHeld $
           cmap $ \(Player, Position x y) -> Position (x + playerSpeedPPS * dt) y
      pure stID

@@ -41,9 +41,11 @@ data App w s = App
     , appLogger            :: !Logger
     }
 
+-- | Makes an app with the given World initializer
 makeApp :: MonadIO m => IO w -> m (App w ())
 makeApp = makeAppWith def
 
+-- | Makes an app with the given asset loading settings and world initializer
 makeAppWith :: MonadIO m => AssetSettings -> IO w -> m (App w ())
 makeAppWith settings mkWorld = do
     texQualOverrides <- mkTextureScaleQualityOverrides
@@ -55,39 +57,49 @@ makeAppWith settings mkWorld = do
 
 -- Setup --
 
+-- | Updates the SDL WindowConfig for the app
 updateWindowConfig :: (SDL.WindowConfig -> SDL.WindowConfig) -> App w s -> App w s
 updateWindowConfig f app = app {appWindowConfig = f (appWindowConfig app)}
 
+-- | Sets the title of the app
 withTitle :: Text -> App w s -> App w s
 withTitle title app = app {appTitle = title}
 
+-- | Adds a type of asset loader a for loading r
 withAssetLoader :: (a `CanLoad` r, Typeable a, Typeable r) => a r -> App w s -> App w s
 withAssetLoader loader app = app {appAssets = insertAssetLoader loader $ appAssets app}
 
+-- | Adds a loader resource for assets to access while loading
 withLoaderResource :: Typeable a => a -> App w s -> App w s
 withLoaderResource val app = app {appAssets = insertLoaderResource val $ appAssets app}
 
+-- | Sets the initial state to begin with during app startup
 withInitState :: s -> App w o -> App w s
 withInitState i app = app {appInitStateID = i, appStartups = Map.empty, appSystems = Map.empty, appFinalizers = Map.empty}
 
+-- | Adds a startup action for the given state
 withStartup :: Ord s => s -> StateStartup w -> App w s -> App w s
 withStartup i sys app = app {appStartups = Map.alter addStartup i (appStartups app)}
     where addStartup (Just l) = Just $ sys:l
           addStartup Nothing  = Just [sys]
 
+-- | Adds a continually-run action for the given state
 withSystem :: Ord s => s -> StateSystem w s -> App w s -> App w s
 withSystem st sys app = app {appSystems = Map.alter addSystem st (appSystems app)}
     where addSystem (Just l) = Just $ sys:l
           addSystem Nothing  = Just [sys]
 
+-- | Adds a finishing action for the given state
 withFinalizer :: Ord s => s -> StateFinalizer w -> App w s -> App w s
 withFinalizer st sys app = app {appFinalizers = Map.alter addFinalizer st (appFinalizers app)}
     where addFinalizer (Just l) = Just $ sys:l
           addFinalizer Nothing  = Just [sys]
 
+-- | Sets the target number of render refreshers per second for the app (default is Just 120, Nothing is no cap)
 withTargetRefreshRate :: Maybe Float -> App w s -> App w s
 withTargetRefreshRate rate app = app {appTargetRefreshRate = rate}
 
+-- | Sets the Logger that the app will use
 withLogger :: Logger -> App w s -> App w s
 withLogger logger app = app {appLogger = logger}
 

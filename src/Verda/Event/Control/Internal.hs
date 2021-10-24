@@ -176,6 +176,12 @@ mkControlState = liftIO $ ControlState
     <*> stToIO HT.new
     <*> stToIO HT.new
 
+whenInput :: MonadIO m => ControlState -> InputCode -> (InputState -> Bool) -> m a -> m ()
+whenInput controlSt code cond action = do
+    inputSt <- getInputState controlSt code
+    when (cond inputSt) $
+        void action
+
 getInputState :: MonadIO m => ControlState -> InputCode -> m InputState
 getInputState ControlState{..} code = liftIO $ case code of
     ScanCode n                         -> safeRead n scanCodeStates
