@@ -1,261 +1,162 @@
-cabal-version: 1.12
+cabal-version:      3.6
+name:               verda
+version:            0.1.0.0
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
---
--- see: https://github.com/sol/hpack
---
--- hash: 2a4181380f4955cf7e58cc6fb723639cf36a4a8b64f1b4a5c15449febc87aadd
+-- A short (one-line) description of the package.
+-- synopsis:
 
-name:           verda
-version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/erintorno/verda#readme>
-homepage:       https://github.com/erintorno/verda#readme
-bug-reports:    https://github.com/erintorno/verda/issues
-author:         Erin Torno
-maintainer:     erintorno@gmail.com
-copyright:      2021 Erin Torno
-license:        BSD3
-license-file:   LICENSE
-build-type:     Simple
-extra-source-files:
-    README.md
-    ChangeLog.md
+-- A longer description of the package.
+-- description:
 
-source-repository head
-  type: git
-  location: https://github.com/erintorno/verda
+-- A URL where users can report bugs.
+-- bug-reports:
+
+license-file:       LICENSE.md
+author:             Erin Torno
+maintainer:         erintorno@gmail.com
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+common common-extensions
+    ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns
+    if os(windows)
+        ghc-options: -optl-mconsole -optl-mwindows
+    default-extensions:
+        BangPatterns
+        ConstraintKinds
+        DataKinds
+        DefaultSignatures
+        DeriveFoldable
+        DeriveFunctor
+        DeriveGeneric
+        ExplicitForAll
+        FlexibleContexts
+        FlexibleInstances
+        GADTs
+        GeneralizedNewtypeDeriving
+        KindSignatures
+        LambdaCase
+        MultiParamTypeClasses
+        MultiWayIf
+        NamedFieldPuns
+        OverloadedLabels
+        OverloadedStrings
+        PatternSynonyms
+        RankNTypes
+        RecordWildCards
+        ScopedTypeVariables
+        TupleSections
+        TypeApplications
+        TypeFamilies
+        TypeOperators
 
 library
-  exposed-modules:
-      Verda.App
-      Verda.App.Internal
-      Verda.Asset
-      Verda.Asset.Bundle
-      Verda.Asset.Internal
-      Verda.Asset.Interop
-      Verda.Asset.Path
-      Verda.Asset.Types
-      Verda.Data.Components
-      Verda.Event.Components
-      Verda.Event.Control
-      Verda.Event.Control.Internal
-      Verda.Event.Handler
-      Verda.Graphics.Camera
-      Verda.Graphics.Color
-      Verda.Graphics.Components
-      Verda.Graphics.SDL
-      Verda.Graphics.Texture
-      Verda.Graphics.Vulkan.Buffers
-      Verda.Graphics.Vulkan.Device
-      Verda.Graphics.Vulkan.GraphicsPipeline
-      Verda.Graphics.Vulkan.Internal
-      Verda.Graphics.Vulkan.RenderPass
-      Verda.Graphics.Vulkan.Shader
-      Verda.Graphics.Vulkan.Window
-      Verda.System.Renderer
-      Verda.Util.Apecs
-      Verda.Util.Container
-      Verda.Util.Dhall
-      Verda.Util.Error
-      Verda.Util.Logger
-      Verda.Util.Template
-      Verda.World
-  other-modules:
-      Paths_verda
-  hs-source-dirs:
-      src
-  default-extensions:
-      BangPatterns
-      ConstraintKinds
-      DataKinds
-      DefaultSignatures
-      DeriveFoldable
-      DeriveFunctor
-      DeriveGeneric
-      ExplicitForAll
-      FlexibleContexts
-      FlexibleInstances
-      GADTs
-      GeneralizedNewtypeDeriving
-      KindSignatures
-      LambdaCase
-      MultiParamTypeClasses
-      MultiWayIf
-      NamedFieldPuns
-      OverloadedLabels
-      OverloadedStrings
-      PatternSynonyms
-      RankNTypes
-      RecordWildCards
-      ScopedTypeVariables
-      TupleSections
-      TypeApplications
-      TypeFamilies
-      TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns
-  build-depends:
-      apecs ==0.9.*
-    , base >=4.7 && <5
-    , bytestring ==0.10.*
-    , containers ==0.6.*
-    , data-default ==0.7.*
-    , dhall ==1.39.*
-    , exceptions ==0.10.*
-    , filepath ==1.4.*
-    , fsnotify ==0.3.*
-    , hashable ==1.3.*
-    , hashtables ==1.2.*
-    , linear ==1.21.*
-    , managed ==1.0.*
-    , mtl ==2.2.*
-    , primitive ==0.7.*
-    , say ==0.1.*
-    , sdl2 ==2.5.*
-    , sdl2-image ==2.0.*
-    , template-haskell ==2.16.*
-    , text >=1.2.4 && <1.3
-    , text-manipulate ==0.3.*
-    , vector ==0.12.*
-    , vector-th-unbox ==0.2.*
-    , vulkan ==3.11.*
-    , vulkan-utils >=0.5.1 && <0.6
-  default-language: Haskell2010
+    import:           common-extensions
+    build-depends:    base             ^>=4.14.3.0
+                    , apecs            ^>=0.9
+                    , bytestring       ^>=0.11
+                    , containers       ^>=0.6
+                    , data-default     ^>=0.7
+                    , dhall            ^>=1.40
+                    , exceptions       ^>=0.10
+                    , filepath         ^>=1.4
+                    , fsnotify         ^>=0.3
+                    , hashable         ^>=1.4
+                    , hashtables       ^>=1.3
+                    , linear           ^>=1.21
+                    , managed          ^>=1.0
+                    , mtl              ^>=2.2
+                    , primitive        ^>=0.7
+                    , say              ^>=0.1
+                    , sdl2             ^>=2.5
+                    , sdl2-image       ^>=2.0
+                    , template-haskell ^>=2.16
+                    , text             ^>=1.2
+                    , vector           ^>=0.12
+                    , vector-th-unbox  ^>=0.2
+                    , vulkan           ^>=3.15
+                    , vulkan-utils     ^>=0.5.5
+    hs-source-dirs:   src
+    default-language: Haskell2010
+    exposed-modules:  Verda.App
+                      Verda.App.Internal
+                      Verda.Asset
+                      Verda.Asset.Bundle
+                      Verda.Asset.Internal
+                      Verda.Asset.Interop
+                      Verda.Asset.Path
+                      Verda.Asset.Types
+                      Verda.Data.Components
+                      Verda.Event.Components
+                      Verda.Event.Control
+                      Verda.Event.Control.Internal
+                      Verda.Event.Handler
+                      Verda.Graphics.Camera
+                      Verda.Graphics.Color
+                      Verda.Graphics.Components
+                      Verda.Graphics.SDL
+                      Verda.Graphics.Texture
+                      Verda.Graphics.Vulkan.Buffers
+                      Verda.Graphics.Vulkan.Device
+                      Verda.Graphics.Vulkan.GraphicsPipeline
+                      Verda.Graphics.Vulkan.Internal
+                      Verda.Graphics.Vulkan.RenderPass
+                      Verda.Graphics.Vulkan.Shader
+                      Verda.Graphics.Vulkan.Window
+                      Verda.System.Renderer
+                      Verda.Util.Apecs
+                      Verda.Util.Container
+                      Verda.Util.Error
+                      Verda.Util.Logger
+                      Verda.Util.Template
+                      Verda.World
 
 executable examples-shmup
-  main-is: Main.hs
-  other-modules:
-      Paths_verda
-  hs-source-dirs:
-      examples/shmup
-  default-extensions:
-      BangPatterns
-      ConstraintKinds
-      DataKinds
-      DefaultSignatures
-      DeriveFoldable
-      DeriveFunctor
-      DeriveGeneric
-      ExplicitForAll
-      FlexibleContexts
-      FlexibleInstances
-      GADTs
-      GeneralizedNewtypeDeriving
-      KindSignatures
-      LambdaCase
-      MultiParamTypeClasses
-      MultiWayIf
-      NamedFieldPuns
-      OverloadedLabels
-      OverloadedStrings
-      PatternSynonyms
-      RankNTypes
-      RecordWildCards
-      ScopedTypeVariables
-      TupleSections
-      TypeApplications
-      TypeFamilies
-      TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows
-  build-depends:
-      apecs ==0.9.*
-    , base >=4.7 && <5
-    , bytestring ==0.10.*
-    , containers ==0.6.*
-    , data-default ==0.7.*
-    , exceptions ==0.10.*
-    , filepath ==1.4.*
-    , hashable ==1.3.*
-    , hashtables ==1.2.*
-    , linear ==1.21.*
-    , managed ==1.0.*
-    , mtl ==2.2.*
-    , primitive ==0.7.*
-    , say ==0.1.*
-    , sdl2 ==2.5.*
-    , sdl2-image ==2.0.*
-    , template-haskell ==2.16.*
-    , text >=1.2.4 && <1.3
-    , text-manipulate ==0.3.*
-    , vector ==0.12.*
-    , vector-th-unbox ==0.2.*
-    , verda
-    , vulkan ==3.11.*
-    , vulkan-utils >=0.5.1 && <0.6
-  default-language: Haskell2010
+    import:           common-extensions
+    main-is:          Main.hs
+    other-modules:    Paths_verda
+    hs-source-dirs:   examples/shmup
+    ghc-options:      -threaded -rtsopts -with-rtsopts=-N 
+    build-depends:    base ^>=4.14.3.0
+                    , verda
+                    , apecs            ^>=0.9
+                    , data-default     ^>=0.7
+                    , sdl2             ^>=2.5
+    hs-source-dirs:   app
+    default-language: Haskell2010
 
 test-suite verda-test
-  type: exitcode-stdio-1.0
-  main-is: Main.hs
-  other-modules:
-      Spec
-      Verda.AppSpec
-      Verda.Asset.BundleSpec
-      Verda.Asset.InternalSpec
-      Verda.Asset.PathSpec
-      Verda.Event.Control.InternalSpec
-      Verda.Graphics.ColorSpec
-      Verda.Graphics.TextureSpec
-      Verda.Test.Utils
-      Verda.Util.ContainerSpec
-      Paths_verda
-  hs-source-dirs:
-      test
-  default-extensions:
-      BangPatterns
-      ConstraintKinds
-      DataKinds
-      DefaultSignatures
-      DeriveFoldable
-      DeriveFunctor
-      DeriveGeneric
-      ExplicitForAll
-      FlexibleContexts
-      FlexibleInstances
-      GADTs
-      GeneralizedNewtypeDeriving
-      KindSignatures
-      LambdaCase
-      MultiParamTypeClasses
-      MultiWayIf
-      NamedFieldPuns
-      OverloadedLabels
-      OverloadedStrings
-      PatternSynonyms
-      RankNTypes
-      RecordWildCards
-      ScopedTypeVariables
-      TupleSections
-      TypeApplications
-      TypeFamilies
-      TypeOperators
-  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wredundant-constraints -Wincomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N -optl-mconsole -optl-mwindows
-  build-depends:
-      HUnit ==1.6.*
-    , apecs ==0.9.*
-    , base >=4.7 && <5
-    , bytestring ==0.10.*
-    , containers ==0.6.*
-    , data-default ==0.7.*
-    , dhall ==1.39.*
-    , directory >=1.3.6 && <1.4
-    , exceptions ==0.10.*
-    , filepath ==1.4.*
-    , hashable ==1.3.*
-    , hashtables ==1.2.*
-    , hspec >=2.7.8 && <2.8
-    , linear ==1.21.*
-    , managed ==1.0.*
-    , mtl ==2.2.*
-    , primitive ==0.7.*
-    , say ==0.1.*
-    , sdl2 ==2.5.*
-    , sdl2-image ==2.0.*
-    , template-haskell ==2.16.*
-    , text >=1.2.4 && <1.3
-    , text-manipulate ==0.3.*
-    , vector ==0.12.*
-    , vector-th-unbox ==0.2.*
-    , verda
-    , vulkan ==3.11.*
-    , vulkan-utils >=0.5.1 && <0.6
-  default-language: Haskell2010
+    import:           common-extensions
+    type:             exitcode-stdio-1.0
+    main-is:          Main.hs
+    other-modules:    Spec
+                      Verda.AppSpec
+                      Verda.Asset.BundleSpec
+                      Verda.Asset.InternalSpec
+                      Verda.Asset.PathSpec
+                      Verda.Event.Control.InternalSpec
+                      Verda.Graphics.ColorSpec
+                      Verda.Graphics.TextureSpec
+                      Verda.Test.Utils
+                      Verda.Util.ContainerSpec
+                      Paths_verda
+    build-depends:    base ^>=4.14.3.0
+                    , verda
+                    , apecs            ^>=0.9
+                    , bytestring       ^>=0.11
+                    , containers       ^>=0.6
+                    , data-default     ^>=0.7
+                    , dhall            ^>=1.40
+                    , hspec            ^>=2.9
+                    , HUnit            ^>=1.6.2
+                    , mtl              ^>=2.2
+                    , sdl2             ^>=2.5
+                    , text             ^>=1.2
+                    , vector           ^>=0.12
+    hs-source-dirs:   test
+    default-language: Haskell2010
+    build-tool-depends: hspec-discover:hspec-discover == 2.*
+

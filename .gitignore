@@ -1,5 +1,4 @@
-.stack-work*
-./vulkan/
+dist-newstyle/
 unused/
 *~
 stack.yaml.lock

@@ -16,7 +16,6 @@ import           Data.Maybe
 import           Data.Set                     (Set)
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
-import qualified Data.Text.Manipulate         as T
 import qualified Dhall
 import           GHC.Generics
 import qualified SDL
@@ -46,11 +45,10 @@ mkTextureScaleQualityOverrides :: MonadIO m => m TextureScaleQualityOverrides
 mkTextureScaleQualityOverrides = fmap TextureScaleQualityOverrides $ liftIO $ stToIO HT.new
 
 data TextureConfig = TextureConfig
-    { texConFile         :: !Path
-    , texConScaleQuality :: !ScaleQuality
+    { file         :: !Path
+    , scaleQuality :: !ScaleQuality
     } deriving (Eq, Generic, Read, Show)
-instance Dhall.FromDhall TextureConfig where
-    autoWith _ = Dhall.genericAutoWith (Dhall.defaultInterpretOptions {Dhall.fieldModifier = \n -> T.toCamel $ fromMaybe n $ T.stripPrefix "texCon" n})
+instance Dhall.FromDhall TextureConfig
 
 data Texture = Texture
     { sdlTexture      :: !SDL.Texture
@@ -70,9 +68,9 @@ instance TextureLoader `CanLoad` Texture where
                     Right TextureConfig{..} ->
                         withResource $ \defQuality -> withResource $ \(TextureScaleQualityOverrides overrides) -> do
                             tex <-
-                                if   texConScaleQuality == defQuality
-                                then getHandle texConFile
-                                else getHandleWith texConFile $ \handle -> liftIO $ stToIO $ HT.insert overrides handle texConScaleQuality
+                                if   scaleQuality == defQuality
+                                then getHandle file
+                                else getHandleWith file $ \handle -> liftIO $ stToIO $ HT.insert overrides handle scaleQuality
                             pure $ simpleAlias tex
             ext -> withResource $ \renderer -> withResource $ \scaleQuality -> withResource $ \(TextureScaleQualityOverrides overrides) ->
                 let -- tga needs special logic since it doesn't use a header
