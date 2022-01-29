@@ -12,6 +12,10 @@ spec =
         fromHexSpec
         modDegreesSpec
         toHexSpec
+        -- RGBA
+        rgbaBrightnessSpec
+        brightestRGBASpec
+        darkestRGBASpec
 
 convertRGBAtoHSVA :: Spec
 convertRGBAtoHSVA =
@@ -65,3 +69,41 @@ toHexSpec =
     context "toHex" $ do
         it "should write css RRGGBBAA color" $ do
             toHex (mkRGBA 179 227 218 255) `shouldBe` "#b3e3daff"
+
+----------
+-- RGBA --
+----------
+
+brightestRGBASpec :: Spec
+brightestRGBASpec =
+    context "brightestRGBA" $ do
+        it "should return Nothing for empty" $
+            brightestRGBA [] `shouldBe` Nothing
+        it "should return only for singleton" $
+            brightestRGBA [rgba (Name @"black")] `shouldBe` Just (rgba (Name @"black"))
+        it "should favor green over others" $
+            brightestRGBA [rgba (Name @"red"), rgba (Name @"lime"), rgba (Name @"blue")] `shouldBe`
+                Just (rgba (Name @"lime"))
+
+darkestRGBASpec :: Spec
+darkestRGBASpec =
+    context "brightestRGBA" $ do
+        it "should return Nothing for empty" $
+            darkestRGBA [] `shouldBe` Nothing
+        it "should return only for singleton" $
+            darkestRGBA [rgba (Name @"black")] `shouldBe` Just (rgba (Name @"black"))
+        it "should favor blue over others" $
+            darkestRGBA [rgba (Name @"red"), rgba (Name @"lime"), rgba (Name @"blue")] `shouldBe`
+                Just (rgba (Name @"blue"))
+
+rgbaBrightnessSpec :: Spec
+rgbaBrightnessSpec =
+    context "rgbaBrightness" $ do
+        it "should produce 0 for black" $
+            rgbaLuminance (rgba (Name @"black")) `shouldBe` 0
+        it "should produce 1 for white" $
+            rgbaLuminance (rgba (Name @"white")) `shouldBe` 1
+        it "should produce half for white with 50% opacity" $
+            rgbaLuminance (mkRGBA 255 255 255 127) `shouldBe` (127 / 255)
+        it "should produce brightness for arbitrary color" $
+            rgbaLuminance (mkRGB 100 148 237) `shouldBe` 0.5638981

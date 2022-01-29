@@ -4,3 +4,6 @@ module Verda.Util.Types where
 class ConvertTo a b where
     -- | Convert value from `a` to `b`
     convert :: a -> b
+
+instance a `ConvertTo` a where
+    convert = id

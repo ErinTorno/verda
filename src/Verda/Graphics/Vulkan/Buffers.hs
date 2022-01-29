@@ -25,7 +25,7 @@ createCommandBuffers VulkanDevice{..} !renderPass !graphicsPipeline !frameBuffer
             }
     buffers <- V.withCommandBuffers vdDevice bufferAllocateInfo allocate
     liftIO . Vec.forM_ (Vec.zip frameBuffers buffers) $ \(frameBuffer, buffer) ->
-        V.useCommandBuffer buffer V.zero {V.flags = V.zero} $ -- COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
+        V.useCommandBuffer buffer V.zero {V.flags = V.COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT} $
             let renderPassBeginInfo = V.zero
                     { V.renderPass  = renderPass
                     , V.framebuffer = frameBuffer

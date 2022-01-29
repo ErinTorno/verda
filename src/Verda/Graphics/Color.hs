@@ -6,9 +6,10 @@ module Verda.Graphics.Color
     , module Verda.Graphics.Color
     ) where
 
+import qualified Data.Foldable                as F
+import           Data.Hashable
 import           Data.Vector.Unboxed.Deriving
 import           Data.Word
-import           Data.Hashable
 import           GHC.Generics
 import           GHC.TypeLits
 import           Linear.V4                    (V4(..))
@@ -37,21 +38,17 @@ data HSVA = HSVA
 -- ConvertTo --
 ---------------
 
-instance RGBA `ConvertTo` RGBA where
-    convert = id
-
 instance RGBA `ConvertTo` HSVA where
     convert (RGBA vec@(V4 ri gi bi _)) = HSVA h s v af
         where -- we convert from an byte to a float between 1 and zero for intensity
-              fromWord :: Word8 -> Float
               fromWord w = fromIntegral w / 255
               -- get max and min components in our color
               maxcomp = max ri $ max bi gi
               mincomp = min ri $ min bi gi
               -- get red, green, and blue intensities
               (V4 rf gf bf af) = fromWord <$> vec
-              delta   = fromWord maxcomp - fromWord mincomp
-              getHue 0.0 _ = 0.0
+              delta      = fromWord maxcomp - fromWord mincomp
+              getHue 0 _ = 0
               getHue _ m | m == ri   = (gf - bf) / delta
                          | m == gi   = (bf - rf) / delta + 2
                          | otherwise = (rf - gf) / delta + 4
@@ -62,13 +59,9 @@ instance RGBA `ConvertTo` HSVA where
                   else 1 - (fromIntegral mincomp / fromIntegral maxcomp)
               v = fromWord maxcomp
 
-instance HSVA `ConvertTo` HSVA where
-    convert = id
-
 instance HSVA `ConvertTo` RGBA where
     convert hsv =
-        let fromFloat :: Float -> Word8
-            fromFloat = round . (*255.0)
+        let fromFloat = round . (*255)
             alph = fromFloat . alpha $ hsv
             hi   = ((`mod`6) . floor . (/60) . hue $ hsv) :: Int
             f    = (hue hsv / 60) - (fromInteger . floor) (hue hsv / 60)
@@ -111,6 +104,32 @@ toHex color = ('#':) . padHex r . padHex g . padHex b . padHex a $ ""
           padHex n = (++) . pad . showHex n $ ""
           pad s    = let len = length s in if len <= 2 then replicate (2 - len) '0' ++ s else s
 
+-- | Returns the perceived brightness of an RGBA color
+-- See <https://www.w3.org/TR/AERT/#color-contrast> for each color components weight
+rgbaLuminance :: a `ConvertTo` RGBA => a -> Float
+rgbaLuminance color = (weight 0.299 r + weight 0.587 g + weight 0.114 b) / 255 * (fromIntegral a / 255)
+    where (RGBA (V4 r g b a)) = convert color
+          weight f c = fromIntegral c * f
+
+-- | Returns the perceived brightess color using `rgbaByBrightness`
+brightestRGBA :: Foldable t => t RGBA -> Maybe RGBA
+brightestRGBA = rgbaByLuminance (>=)
+
+-- | Returns the perceived darkest color using `rgbaByBrightness`
+darkestRGBA :: Foldable t => t RGBA -> Maybe RGBA
+darkestRGBA = rgbaByLuminance (<=)
+
+-- | If non-empty, compares perceived brightness and returns the color chosen the given comparison function
+rgbaByLuminance :: Foldable t => (Float -> Float -> Bool) -> t RGBA -> Maybe RGBA
+rgbaByLuminance comp colors 
+    | F.null colors = Nothing
+    | otherwise     = Just . snd . F.foldl' next (0/0, rgba (Name @"black")) $ colors
+    where next :: (Float, RGBA) -> RGBA -> (Float, RGBA)
+          next (b1, col1) col2 = let b2 = rgbaLuminance col2
+                                  in if   not (isNaN b1) && comp b1 b2
+                                     then (b1, col1)
+                                     else (b2, col2)
+
 --------------------
 -- HSVA functions --
 --------------------
@@ -127,6 +146,9 @@ mkHSVA = HSVA
 
 class BaseColor (name :: Symbol) a where
     -- | Returns a color for the given name and color format
+    -- @
+    -- -- example
+    -- colorOf (Format RGBA @"green")
     colorOf :: proxy a name -> a
 
 data Format f (name :: Symbol) = Format 
@@ -139,13 +161,21 @@ colorFromName = colorOf . format
           format _ = Format
 
 -- | Returns an RGBA color for the given name
+-- @
+-- -- example
+-- rgba (Name @"green")
 rgba :: BaseColor n RGBA => proxy n -> RGBA
 rgba = colorFromName @_ @RGBA
 
 -- | Returns an HSVA color for the given name
+-- @
+-- -- example
+-- hsva (Name @"green")
 hsva :: BaseColor n HSVA => proxy n -> HSVA
 hsva = colorFromName @_ @HSVA
 
+--black :: BaseColor "black" a => a
+--black = colorOf (Format @_ @"black")
 instance BaseColor "black"   RGBA where colorOf _ = mkRGB 0 0 0
 instance BaseColor "black"   HSVA where colorOf _ = mkHSV 0 0 0
 
