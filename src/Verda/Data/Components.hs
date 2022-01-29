@@ -1,6 +1,8 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+
 module Verda.Data.Components where
 
-import Apecs
+import           Apecs
 
 newtype ShouldQuit = ShouldQuit {shouldQuit :: Bool} deriving (Eq, Ord, Read, Show)
 instance Semigroup ShouldQuit where (ShouldQuit a) <> (ShouldQuit b) = ShouldQuit $ a && b

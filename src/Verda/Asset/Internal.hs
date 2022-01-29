@@ -366,7 +366,7 @@ ensureHotReload :: MonadIO m => Assets -> FSNotify.WatchManager -> Path -> Handl
 ensureHotReload assets@Assets{..} fsManager path handle _isMultiThread =
     liftIO $ when (useHotReloading assetSettings) $ do
         let watchDir = Path.addAssetDir (assetFolder assetSettings) (Path.assetDirectory path)
-        putStrLn ("ensureHotReload for " <> show path <> " for dir" <> show watchDir)
+        putStrLn ("ensureHotReload: watching " <> show (unPath path) <> " for dir " <> show (unPath watchDir))
         stopWatchings <- readMVar assetStopWatchingsByPath
         stToIO (HT.lookup stopWatchings path) >>= \case
             Just _  -> pure ()

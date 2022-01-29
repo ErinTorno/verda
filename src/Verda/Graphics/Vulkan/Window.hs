@@ -10,6 +10,7 @@ import           Data.Bits
 import           Data.ByteString              (ByteString)
 import qualified Data.ByteString              as BS
 import           Data.Default
+import           Data.IORef
 import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
 import           Data.Text                    (Text)
@@ -36,26 +37,39 @@ import           Verda.Graphics.Vulkan.Device           (VulkanDevice(..), creat
 import           Verda.Graphics.Vulkan.GraphicsPipeline (createGraphicsPipeline)
 import           Verda.Graphics.Vulkan.Internal         (allocate)
 import           Verda.Graphics.Vulkan.RenderPass       (createRenderPass)
+import           Verda.Graphics.Vulkan.Vertex           (createVertexBuffer)
 import           Verda.Util.Logger
 
-data VulkanWindow = VulkanWindow
-    { vwSDLWindow               :: !SDL.Window
-    , vwSDLRenderer             :: !SDL.Renderer
-    , vwDevice                  :: !VulkanDevice
-    , vwRenderPass              :: !V.RenderPass
-    , vwGraphicsPipeline        :: !V.Pipeline
-    , vwFrameBuffers            :: !(Vector V.Framebuffer)
-    , vwCommandBuffers          :: !(Vector V.CommandBuffer)
-    , vwImageAvailableSemaphore :: !V.Semaphore
-    , vwRenderFinishedSemaphore :: !V.Semaphore
+maxFramesInFlight :: Num a => a
+maxFramesInFlight = 2
+
+data WindowCreateInfo = WindowCreateInfo
+    { appTitle        :: !Text
+    , sdlWindowConfig :: !SDL.WindowConfig
+    , logger          :: !Logger
     }
 
-run :: Text -> SDL.WindowConfig -> Logger -> (VulkanWindow -> IO () -> IO ()) -> IO ()
-run appTitle winConfig logger loop = runManaged $ do
+data VulkanWindow = VulkanWindow
+    { vwSDLWindow                :: !SDL.Window
+    , vwSDLRenderer              :: !SDL.Renderer
+    , vwDevice                   :: !VulkanDevice
+    , vwRenderPass               :: !V.RenderPass
+    , vwGraphicsPipeline         :: !V.Pipeline
+    , vwFrameBuffers             :: !(Vector V.Framebuffer)
+    , vwCommandBuffers           :: !(Vector V.CommandBuffer)
+    , vwImageAvailableSemaphores :: !(Vector V.Semaphore)
+    , vwRenderFinishedSemaphore  :: !V.Semaphore
+    , vwVertexBuffer             :: !V.Buffer
+    }
+
+run :: WindowCreateInfo -> (IORef VulkanWindow -> Managed () -> IO ()) -> Managed ()
+run winCreateInfo loop = do
     withSDL
-    window@VulkanWindow{..} <- withVulkanWindow appTitle winConfig logger
+    window@VulkanWindow{..} <- withVulkanWindow winCreateInfo
     SDL.showWindow vwSDLWindow
-    liftIO $ loop window (drawFrame window)
+    frameState <- liftIO $ newIORef 0
+    windowIORef <- liftIO $ newIORef window
+    liftIO $ loop windowIORef (drawFrame winCreateInfo windowIORef frameState)
     V.deviceWaitIdle (vdDevice vwDevice)
 
 withSDL :: Managed ()
@@ -74,14 +88,14 @@ withWindowSurface inst window = managed $ bracket
 withSDLWindow :: Text -> SDL.WindowConfig -> Managed SDL.Window
 withSDLWindow appTitle winConfig = managed $ bracket (SDL.createWindow appTitle winConfig) SDL.destroyWindow
 
-withVulkanWindow :: Text -> SDL.WindowConfig -> Logger -> Managed VulkanWindow
-withVulkanWindow appTitle winConfig logger = do
-    let context = SDL.windowGraphicsContext winConfig
-        (V2 winW winH)  = fromIntegral <$> SDL.windowInitialSize winConfig
+withVulkanWindow :: WindowCreateInfo -> Managed VulkanWindow
+withVulkanWindow WindowCreateInfo{..} = do
+    let context = SDL.windowGraphicsContext sdlWindowConfig
+        (V2 winW winH)  = fromIntegral <$> SDL.windowInitialSize sdlWindowConfig
         preferredFormat = V.KHR.SurfaceFormatKHR V.FORMAT_B8G8R8_UNORM V.KHR.COLOR_SPACE_SRGB_NONLINEAR_KHR
     when (context /= SDL.VulkanContext) $
         logLineWith logger Error $ "withVulkanWindow was called with a SDL.WindowConfig with a non-VulkanContext (was " <> T.pack (show context) <> ")"
-    vwSDLWindow <- withSDLWindow appTitle winConfig
+    vwSDLWindow <- withSDLWindow appTitle sdlWindowConfig
     instInfo    <- sdlWindowInstanceCreateInfo appTitle logger vwSDLWindow
     inst        <- V.withInstance instInfo Nothing allocate
 
@@ -91,15 +105,16 @@ withVulkanWindow appTitle winConfig logger = do
                                      V.EXT.DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
                                      V.zero
 
-    vwSDLRenderer             <- SDL.createRenderer vwSDLWindow (-1) SDL.defaultRenderer
-    surface                   <- withWindowSurface inst vwSDLWindow
-    vwDevice                  <- createVulkanDevice inst surface preferredFormat winW winH
-    vwRenderPass              <- createRenderPass vwDevice
-    vwGraphicsPipeline        <- createGraphicsPipeline vwDevice vwRenderPass
-    vwFrameBuffers            <- createFrameBuffers vwDevice vwRenderPass
-    vwCommandBuffers          <- createCommandBuffers vwDevice vwRenderPass vwGraphicsPipeline vwFrameBuffers
-    vwImageAvailableSemaphore <- V.withSemaphore (vdDevice vwDevice) V.zero Nothing allocate
-    vwRenderFinishedSemaphore <- V.withSemaphore (vdDevice vwDevice) V.zero Nothing allocate
+    vwSDLRenderer              <- SDL.createRenderer vwSDLWindow (-1) SDL.defaultRenderer
+    surface                    <- withWindowSurface inst vwSDLWindow
+    vwDevice                   <- createVulkanDevice inst surface preferredFormat winW winH
+    vwRenderPass               <- createRenderPass vwDevice
+    vwGraphicsPipeline         <- createGraphicsPipeline vwDevice vwRenderPass
+    vwFrameBuffers             <- createFrameBuffers vwDevice vwRenderPass
+    vwCommandBuffers           <- createCommandBuffers vwDevice vwRenderPass vwGraphicsPipeline vwFrameBuffers
+    vwImageAvailableSemaphores <- Vec.fromList <$> replicateM maxFramesInFlight (V.withSemaphore (vdDevice vwDevice) V.zero Nothing allocate)
+    vwRenderFinishedSemaphore  <- V.withSemaphore (vdDevice vwDevice) V.zero Nothing allocate
+    vwVertexBuffer             <- createVertexBuffer vwDevice
     pure $ VulkanWindow{..}
 
 sdlWindowInstanceCreateInfo :: MonadIO m => Text -> Logger -> SDL.Window -> m (V.InstanceCreateInfo '[V.EXT.DebugUtilsMessengerCreateInfoEXT, V.EXT.ValidationFeaturesEXT])
@@ -138,23 +153,34 @@ filterAvailableExt logger label avail req opt = do
         logLineWith logger Warning $ "Missing optional " <> label <> T.pack (show optMis)
     pure $ reqPres <> optPres
 
-drawFrame :: VulkanWindow -> IO ()
-drawFrame VulkanWindow{..} = do
-    let VulkanDevice{..} = vwDevice
-    (_, imgIdx) <- V.KHR.acquireNextImageKHR vdDevice vdSwapChain maxBound vwImageAvailableSemaphore V.zero
-    let submitInfo = V.zero
-            { V.waitSemaphores   = [vwImageAvailableSemaphore]
-            , V.waitDstStageMask = [V.PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT]
-            , V.commandBuffers   = [V.commandBufferHandle $ vwCommandBuffers Vec.! fromIntegral imgIdx]
-            , V.signalSemaphores = [vwRenderFinishedSemaphore]
-            }
-        presentInfo = V.zero
-            { V.KHR.waitSemaphores = [vwRenderFinishedSemaphore]
-            , V.KHR.swapchains     = [vdSwapChain]
-            , V.KHR.imageIndices   = [imgIdx]
-            }
-    V.queueSubmit vdGraphicsQueue [SomeStruct submitInfo] V.zero 
-    void $ V.KHR.queuePresentKHR vdPresentQueue presentInfo
+drawFrame :: WindowCreateInfo -> IORef VulkanWindow -> IORef Int -> Managed ()
+drawFrame winCreateInfo windowIORef ioref = do
+    VulkanWindow{..} <- liftIO $ readIORef windowIORef
+    iaSemaIdx        <- liftIO $ readIORef ioref
+    let VulkanDevice{..}    = vwDevice
+        imageAvailSemaphore = vwImageAvailableSemaphores Vec.! iaSemaIdx
+    (result, imgIdx) <- V.KHR.acquireNextImageKHR vdDevice vdSwapChain maxBound imageAvailSemaphore V.zero
+    if result == V.ERROR_OUT_OF_DATE_KHR || result == V.ERROR_OUT_OF_DATE_KHR 
+    then do
+        liftIO $ putStrLn "remaking window and continuing"
+        window' <- withVulkanWindow winCreateInfo
+        liftIO $ writeIORef windowIORef window'
+    else do
+        let submitInfo = V.zero
+                { V.waitSemaphores   = [imageAvailSemaphore]
+                , V.waitDstStageMask = [V.PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT]
+                , V.commandBuffers   = [V.commandBufferHandle $ vwCommandBuffers Vec.! fromIntegral imgIdx]
+                , V.signalSemaphores = [vwRenderFinishedSemaphore]
+                }
+            presentInfo = V.zero
+                { V.KHR.waitSemaphores = [vwRenderFinishedSemaphore]
+                , V.KHR.swapchains     = [vdSwapChain]
+                , V.KHR.imageIndices   = [imgIdx]
+                }
+        V.queueSubmit vdGraphicsQueue [SomeStruct submitInfo] V.zero 
+        void $ V.KHR.queuePresentKHR vdPresentQueue presentInfo
+        V.queueWaitIdle vdPresentQueue
+        liftIO $ writeIORef ioref ((iaSemaIdx + 1) `mod` maxFramesInFlight)
 
 getDisplayModeRefreshRate :: VulkanWindow -> Logger -> IO Float
 getDisplayModeRefreshRate VulkanWindow{..} logger =

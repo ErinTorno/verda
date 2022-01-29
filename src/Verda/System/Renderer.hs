@@ -4,7 +4,7 @@ import           Apecs
 import           Control.Monad.IO.Class
 import qualified SDL
 
-import           Verda.Graphics.Color      (Color(..))
+import           Verda.Graphics.Color      (RGBA(..))
 import           Verda.Graphics.Components
 import           Verda.World
 
@@ -20,7 +20,7 @@ rendererSystem renderer = do
         global $= RenderTime (Time newTick elapsed)
     else do
         -- liftIO $ putStrLn $ "Drawing! delay " ++ show delay ++ "; newTick " ++ show newTick
-        ClearColor (Color bkgV4) <- get global 
+        ClearColor (RGBA bkgV4) <- get global 
         SDL.rendererDrawColor renderer SDL.$= bkgV4
         SDL.clear renderer
         SDL.present renderer

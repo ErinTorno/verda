@@ -13,6 +13,7 @@ import qualified Vulkan.Zero                  as V
 import           Verda.Graphics.Vulkan.Device   (VulkanDevice(..))
 import           Verda.Graphics.Vulkan.Internal (allocate)
 import           Verda.Graphics.Vulkan.Shader   (createShaders)
+-- import           Verda.Graphics.Vulkan.Vertex
 import           Verda.Util.Error               (sayErrAndExit)
 
 createGraphicsPipeline :: VulkanDevice -> V.RenderPass -> Managed V.Pipeline
@@ -48,7 +49,8 @@ createGraphicsPipeline VulkanDevice{..} renderPass = do
                 { V.logicOpEnable = False
                 , V.attachments   = [V.zero {V.blendEnable = False, V.colorWriteMask = V.COLOR_COMPONENT_R_BIT .|. V.COLOR_COMPONENT_G_BIT .|. V.COLOR_COMPONENT_B_BIT .|. V.COLOR_COMPONENT_A_BIT}]
                 }
-            , V.vertexInputState   = Just V.zero
+            , V.vertexInputState   = Just $ SomeStruct $ V.zero --{ V.vertexBindingDescriptions   = Vec.singleton bindingDescription
+                                                                --, V.vertexAttributeDescriptions = attributeDescriptions }
             , V.inputAssemblyState = Just V.zero {V.topology = V.PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, V.primitiveRestartEnable = False}
             , V.depthStencilState  = Nothing
             , V.dynamicState       = Nothing

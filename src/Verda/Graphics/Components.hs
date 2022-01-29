@@ -16,11 +16,11 @@ import           Linear.V3
 
 import           Verda.Data.Components (Time(..))
 import           Verda.Graphics.Camera (Camera(..), WindowResolution(..))
-import           Verda.Graphics.Color  (Color(..), black, white)
+import           Verda.Graphics.Color
 
-newtype ClearColor = ClearColor {unClearColor :: Color} deriving (Eq, Generic, Hashable, Ord, Read, Show)
+newtype ClearColor = ClearColor {unClearColor :: RGBA} deriving (Eq, Generic, Hashable, Ord, Read, Show)
 instance Semigroup ClearColor where (<>) = mappend
-instance Monoid    ClearColor where mempty = ClearColor black
+instance Monoid    ClearColor where mempty = ClearColor $ rgba (Name @"black")
 instance Component ClearColor where type Storage ClearColor = Global ClearColor
 instance Default ClearColor where
     def = mempty
@@ -43,8 +43,8 @@ instance Component TargetRefreshRate where type Storage TargetRefreshRate = Glob
 instance Default TargetRefreshRate where
     def = mempty
 
-newtype Tint = Tint {unTint :: Color} deriving (Eq, Generic, Hashable, Ord, Read, Show)
+newtype Tint = Tint {unTint :: RGBA} deriving (Eq, Generic, Hashable, Ord, Read, Show)
 instance Component Tint where
     type Storage Tint = Map Tint
 instance Default Tint where
-    def = Tint white
+    def = Tint $ rgba (Name @"white")

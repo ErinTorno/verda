@@ -3,7 +3,9 @@ module Verda.App.Internal where
 import           Apecs                        hiding (Map)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Control.Monad.Managed
 import           Data.Default
+import           Data.IORef
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe
@@ -107,14 +109,15 @@ withLogger logger app = app {appLogger = logger}
 
 -- | Starts the given app and runs its systems and asset loaders until the ShouldQuit global is True
 start :: Ord s => (VerdaWorld w IO) => App w s -> IO ()
-start app@App{..} = Vulkan.run appTitle appWindowConfig def $ \window@Vulkan.VulkanWindow{..} render -> do
+start app@App{..} = runManaged $ Vulkan.run (Vulkan.WindowCreateInfo {Vulkan.sdlWindowConfig = appWindowConfig, Vulkan.logger = def,..}) $ \windowIORef render -> do
+    window@Vulkan.VulkanWindow{..} <- readIORef windowIORef
     targetRefreshRate <- case appTargetRefreshRate of
         Just r  -> pure r
         Nothing -> Vulkan.getDisplayModeRefreshRate window def
+    res   <- SDL.get $ SDL.windowSize vwSDLWindow
     let finAssets = insertLoaderResource vwSDLRenderer appAssets
     void $ Verda.Asset.Internal.forkAssetLoader finAssets
     world <- appWorld
-    res   <- SDL.get $ SDL.windowSize vwSDLWindow
     time  <- SDL.time
     runWith world $ do
         global $= appAssets
@@ -124,13 +127,16 @@ start app@App{..} = Vulkan.run appTitle appWindowConfig def $ \window@Vulkan.Vul
         global $= TargetRefreshRate targetRefreshRate
         set global =<< mkControlState
         let loop !s !startups !lastRenderTime !lastTime = do
+                window' <- liftIO $ readIORef windowIORef
+                res'    <- SDL.get $ SDL.windowSize (Vulkan.vwSDLWindow window')
+                global  $= WindowResolution (fromIntegral <$> res')
                 handleEvents
                 newTime <- SDL.time
                 Verda.Asset.Internal.updateSingleThreaded finAssets
                 global  $= Time (newTime - lastTime) newTime
                 (s', startups') <- runSystems app s startups
                 TargetRefreshRate refreshRate <- get global
-                newRenderTime <- runIfReady refreshRate lastRenderTime (liftIO render)
+                newRenderTime <- runIfReady refreshRate lastRenderTime (liftIO $ runManaged render)
                 quit    <- shouldQuit <$> get global
                 unless quit $
                     loop s' startups' newRenderTime newTime
