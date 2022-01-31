@@ -1,15 +1,19 @@
 {-# LANGUAGE OverloadedLists #-}
 
 module Verda.Graphics.Texture
-    ( ScaleQuality(..)
+    ( Icon(..)
+    , ScaleQuality(..)
     , Texture(..)
     , TextureConfig(..)
     , TextureLoader(..)
     , TextureScaleQualityOverrides(..)
     , mkTextureScaleQualityOverrides
     ) where
+
 import           Control.Monad.Reader
 import           Control.Monad.ST             (RealWorld, stToIO)
+import           Data.ByteString              (ByteString)
+import           Data.Dynamic
 import           Data.HashTable.ST.Basic      (HashTable)
 import qualified Data.HashTable.ST.Basic      as HT
 import           Data.Maybe
@@ -39,7 +43,9 @@ toRenderScaleQuality q = case q of
     ScaleLinear     -> SDL.ScaleLinear
     ScaleAnistropic -> SDL.ScaleBest
 
-newtype TextureScaleQualityOverrides = TextureScaleQualityOverrides (HashTable RealWorld (Handle Texture) ScaleQuality)
+data Image
+
+newtype TextureScaleQualityOverrides = TextureScaleQualityOverrides (HashTable RealWorld (Handle Image) ScaleQuality)
 
 mkTextureScaleQualityOverrides :: MonadIO m => m TextureScaleQualityOverrides
 mkTextureScaleQualityOverrides = fmap TextureScaleQualityOverrides $ liftIO $ stToIO HT.new
@@ -50,45 +56,21 @@ data TextureConfig = TextureConfig
     } deriving (Eq, Generic, Read, Show)
 instance Dhall.FromDhall TextureConfig
 
-data Texture = Texture
-    { sdlTexture      :: !SDL.Texture
-    , surfaceProvider :: !(Handle (IO SDL.Surface)) -- sometimes still used internally (like with icons), but in most cases we don't want to load Surfaces into memory unless necessary
-    }
+newtype Icon = Icon {unIcon :: SDL.Surface}
+
+newtype Texture = Texture {unTexture :: SDL.Texture}
 
 data TextureLoader r = TextureLoader
+
+instance TextureLoader `CanLoad` Icon where
+    extensions _ = validExtensions
+    loadAsset  _ info = loadImageAsset (\case {"tga" -> const SDL.Image.decodeTGA; _ -> const SDL.Image.decode}) Icon info
 
 instance TextureLoader `CanLoad` Texture where
     -- | True, as SDL.Renderer requires a single-threaded environment
     isSingleThreadOnly _ = True
     extensions _ = validExtensions
-    loadAsset  _ AssetInfo{..} bytes = case assetExtension assetPath of
-            "tex.dhall" ->
-                parseFromDhall bytes >>= \case
-                    Left err                -> pure $ simpleFailure err
-                    Right TextureConfig{..} ->
-                        withResource $ \defQuality -> withResource $ \(TextureScaleQualityOverrides overrides) -> do
-                            tex <-
-                                if   scaleQuality == defQuality
-                                then getHandle file
-                                else getHandleWith file $ \handle -> liftIO $ stToIO $ HT.insert overrides handle scaleQuality
-                            pure $ simpleAlias tex
-            ext -> withResource $ \renderer -> withResource $ \scaleQuality -> withResource $ \(TextureScaleQualityOverrides overrides) ->
-                let -- tga needs special logic since it doesn't use a header
-                    chooseDec :: a -> a -> a
-                    chooseDec a b = case ext of {"tga" -> a; _ -> b}
-                 in do scaling <- fromMaybe scaleQuality <$> liftIO (stToIO $ HT.lookup overrides assetHandle)
-                       withScaleQuality scaling $ do
-                           assets <- ask
-                           tex    <- chooseDec SDL.Image.decodeTextureTGA SDL.Image.decodeTexture renderer bytes
-                           let provider = withScaleQuality scaling $ do
-                                   -- re-read bytes since this use case is rare, but will prevent `bytes` from being kept in memory
-                                   bytes' <- readAssetFileBytes assets assetPath
-                                   chooseDec SDL.Image.decodeTGA SDL.Image.decode bytes'
-                           surHandle <- labeled assetPath "surfaceProvider" $ LoadedAsset provider []
-                           pure . simpleSuccess $ Texture
-                               { sdlTexture      = tex
-                               , surfaceProvider = surHandle
-                               }
+    loadAsset  _ info = loadImageAsset (\case {"tga" -> SDL.Image.decodeTextureTGA; _ -> SDL.Image.decodeTexture}) Texture info
 
 withScaleQuality :: MonadIO m => ScaleQuality -> m a -> m a
 withScaleQuality quality action = do
@@ -97,3 +79,21 @@ withScaleQuality quality action = do
     r <- action
     SDL.HintRenderScaleQuality SDL.$= defScaling
     pure r
+
+loadImageAsset :: Typeable b => (Text -> SDL.Renderer -> ByteString -> LoadContext a) -> (a -> b) -> AssetLoadFn b
+loadImageAsset decode constr AssetInfo{..} bytes = case assetExtension assetPath of
+    "tex.dhall" ->
+        parseFromDhall bytes >>= \case
+            Left err                -> pure $ simpleFailure err
+            Right TextureConfig{..} ->
+                withResource $ \defQuality -> withResource $ \(TextureScaleQualityOverrides overrides) -> do
+                    tex <-
+                        if   scaleQuality == defQuality
+                        then getHandle file
+                        else getHandleWith file $ \handle -> liftIO $ stToIO $ HT.insert overrides (coerceHandle handle) scaleQuality
+                    pure $ simpleAlias tex
+    ext -> withResource $ \renderer -> withResource $ \scaleQuality -> withResource $ \(TextureScaleQualityOverrides overrides) -> do
+        scaling <- fromMaybe scaleQuality <$> liftIO (stToIO $ HT.lookup overrides (coerceHandle assetHandle))
+        withScaleQuality scaling $ do
+            tex    <- decode ext renderer bytes
+            pure . simpleSuccess . constr $ tex

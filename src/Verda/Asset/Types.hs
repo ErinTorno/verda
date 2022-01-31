@@ -56,7 +56,7 @@ data AssetSettings = AssetSettings
     { assetFolder     :: !FilePath
     -- ^ What to use as the root directory for these assets (default "assets")
     , defaultAssetLen :: !Int
-    -- ^ How many slots we initially allocate for asset handles (default 64)
+    -- ^ How many slots we initially allocate for asset handles (default 256)
     , threadDelayMS   :: !Int
     -- ^ How long to wait after processing before we should try again (default 15)
     , readAssetFile   :: FilePath -> IO ByteString
@@ -67,7 +67,7 @@ data AssetSettings = AssetSettings
 instance Default AssetSettings where
     def = AssetSettings
         { assetFolder     = "assets"
-        , defaultAssetLen = 64
+        , defaultAssetLen = 256
         , threadDelayMS   = 15
         , readAssetFile   = BS.readFile
         , useHotReloading = False
@@ -82,7 +82,7 @@ data Loader = Loader
 data Assets = Assets
     { assetSettings            :: !AssetSettings
     -- ^ The settings to use when loading assets
-    , assetLoaders             :: !(Map Text Loader)
+    , assetLoaders             :: !(Map Text [Loader])
     -- ^ A map of extensions to functions that can load that type of asset
     , loaderResources          :: !(Map SomeTypeRep Dynamic)
     -- ^ A map of SomeTypeReps to values that can be accessed by AssetLoaders
@@ -92,7 +92,7 @@ data Assets = Assets
     -- ^ A vector of assets, either empty as Nothing, or loaded as Just
     , assetStatuses            :: !(MVar (IOVector AssetStatus))
     -- ^ A vector of statuses for assets with the given Handle index
-    , handlesByPath            :: !(MVar (HashTable RealWorld Path (Handle ())))
+    , handlesByPath            :: !(MVar (HashTable RealWorld (SomeTypeRep, Path) (Handle ())))
     -- ^ A hashtable of asset paths to associated handles
     , assetsToLoad             :: !(MVar (Seq (Int, AssetLoadFn Dynamic, AssetInfo ())))
     -- ^ A sequence of tuples of (Handle index, loader function, asset info) that are awaiting loading

@@ -11,7 +11,6 @@ import Verda.Asset
 import Verda.Event.Control
 import Verda.Graphics.Color
 import Verda.Graphics.Texture
-import Verda.Util.Error        (sayErrStringAndExit)
 import Verda.Util.Logger
 import Verda.World
 
@@ -52,9 +51,11 @@ type SystemT' = SystemT ExampleWorld IO
 main :: IO ()
 main = makeAppWith (def {assetFolder = "examples/assets", useHotReloading = True}) initExampleWorld >>= start
      . withTitle     "Example Shmup"
+     . withIcon      "icon.png"
      . withStartup   Playing playingLoadAssetsStartUp
      . withStartup   Playing playingPlaceEtyStartUp
      . withSystem    Playing handleInput
+     . withDefaultSystems
      . withInitState Playing
      . withLoaderResource ScaleNearest -- for best scaling of pixel sprites, we use Nearest scaling
 
@@ -63,8 +64,8 @@ main = makeAppWith (def {assetFolder = "examples/assets", useHotReloading = True
 playerSpeedPPS :: Float
 playerSpeedPPS = 200
 
-playingLoadAssetsStartUp :: SystemT' Bool
-playingLoadAssetsStartUp = do
+playingLoadAssetsStartUp :: StateID -> SystemT' StartupResult
+playingLoadAssetsStartUp _stID = do
      assets <- get global
      enemyTex        <- loadHandle assets "enemy.png" 
      enemyBulletTex  <- loadHandle assets "enemy_bullet.png" 
@@ -74,21 +75,21 @@ playingLoadAssetsStartUp = do
          points   = 0
      global $= GameState{..}
      global $= ClearColor (mkRGBA 40 40 46 0)
-     pure True
+     pure Done
 
-playingPlaceEtyStartUp :: SystemT' Bool
-playingPlaceEtyStartUp = do
+playingPlaceEtyStartUp :: StateID -> SystemT' StartupResult
+playingPlaceEtyStartUp _stID = do
      GameState{..} <- get global
      assets  <- get global
      summary <- loadSetSummary assets assetSet
      if   isFinished summary
      then case summary of
-               Failed err -> sayErrStringAndExit err -- assets failed to load, so we kill the program with the summary of failed assets
+               Failed err -> logStringAndExit Error err -- assets failed to load, so we kill the program with the summary of failed assets
                _          -> do
                     logLine Info "All assets finished!"
                     _ety <- newEntity (Player, Position 300 600)
-                    pure True
-     else pure False
+                    pure Done
+     else pure Again
 
 handleInput :: StateID -> SystemT' StateID
 handleInput stID = do

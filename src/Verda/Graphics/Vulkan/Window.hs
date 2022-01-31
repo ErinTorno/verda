@@ -16,7 +16,6 @@ import qualified Data.Set                     as Set
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
 import qualified Data.Text.Encoding           as T
-import           Data.Vector                  (Vector)
 import qualified Data.Vector                  as Vec
 import           Foreign.Ptr
 import           Linear.V2
@@ -33,34 +32,16 @@ import qualified Vulkan.Zero                  as V
 import           Verda.Graphics.Components
 import qualified Verda.Graphics.SDL                     as SDL
 import           Verda.Graphics.Vulkan.Buffers          (createCommandBuffers, createFrameBuffers)
-import           Verda.Graphics.Vulkan.Device           (VulkanDevice(..), createVulkanDevice)
+import           Verda.Graphics.Vulkan.Device           (createVulkanDevice)
 import           Verda.Graphics.Vulkan.GraphicsPipeline (createGraphicsPipeline)
 import           Verda.Graphics.Vulkan.Internal         (allocate)
 import           Verda.Graphics.Vulkan.RenderPass       (createRenderPass)
+import           Verda.Graphics.Vulkan.Types
 import           Verda.Graphics.Vulkan.Vertex           (createVertexBuffer)
 import           Verda.Util.Logger
 
 maxFramesInFlight :: Num a => a
 maxFramesInFlight = 2
-
-data WindowCreateInfo = WindowCreateInfo
-    { appTitle        :: !Text
-    , sdlWindowConfig :: !SDL.WindowConfig
-    , logger          :: !Logger
-    }
-
-data VulkanWindow = VulkanWindow
-    { vwSDLWindow                :: !SDL.Window
-    , vwSDLRenderer              :: !SDL.Renderer
-    , vwDevice                   :: !VulkanDevice
-    , vwRenderPass               :: !V.RenderPass
-    , vwGraphicsPipeline         :: !V.Pipeline
-    , vwFrameBuffers             :: !(Vector V.Framebuffer)
-    , vwCommandBuffers           :: !(Vector V.CommandBuffer)
-    , vwImageAvailableSemaphores :: !(Vector V.Semaphore)
-    , vwRenderFinishedSemaphore  :: !V.Semaphore
-    , vwVertexBuffer             :: !V.Buffer
-    }
 
 run :: WindowCreateInfo -> (IORef VulkanWindow -> Managed () -> IO ()) -> Managed ()
 run winCreateInfo loop = do

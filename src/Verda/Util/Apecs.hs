@@ -1,10 +1,14 @@
 module Verda.Util.Apecs where
 
 import           Apecs
-import           Apecs.Core            (explGet, explMembers, explSet)
-import           Control.Monad         (when)
-import           Data.Kind             (Constraint)
-import qualified Data.Vector.Unboxed   as UVec
+import           Apecs.Core
+import           Control.Monad          (when)
+import           Data.Kind              (Constraint)
+import qualified Data.Vector.Unboxed    as UVec
+
+-----------
+-- Types --
+-----------
 
 type family ReadWrite w m c :: Constraint where
     ReadWrite w m c = (Get w m c, Has w m c, Set w m c)
@@ -12,6 +16,10 @@ type family ReadWrite w m c :: Constraint where
 type family ReadWriteEach w m cs :: Constraint where
     ReadWriteEach w m '[]       = ()
     ReadWriteEach w m (c ': cs) = (Get w m c, Has w m c, Set w m c, ReadWriteEach w m cs)
+
+--------------------
+-- Util functions --
+--------------------
 
 {-# INLINE getUnique #-}
 getUnique :: forall w m c. (Members w m c, Get w m c) => SystemT w m (Maybe c)

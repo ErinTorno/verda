@@ -5,16 +5,17 @@ module Verda.Graphics.Vulkan.GraphicsPipeline where
 
 import           Control.Monad.Managed
 import           Data.Bits
+import           Data.Default
 import qualified Data.Vector                  as Vec
 import qualified Vulkan.Core10                as V
 import           Vulkan.CStruct.Extends       (SomeStruct(..))
 import qualified Vulkan.Zero                  as V
 
-import           Verda.Graphics.Vulkan.Device   (VulkanDevice(..))
 import           Verda.Graphics.Vulkan.Internal (allocate)
 import           Verda.Graphics.Vulkan.Shader   (createShaders)
+import           Verda.Graphics.Vulkan.Types
 -- import           Verda.Graphics.Vulkan.Vertex
-import           Verda.Util.Error               (sayErrAndExit)
+import           Verda.Util.Logger
 
 createGraphicsPipeline :: VulkanDevice -> V.RenderPass -> Managed V.Pipeline
 createGraphicsPipeline VulkanDevice{..} renderPass = do
@@ -60,6 +61,6 @@ createGraphicsPipeline VulkanDevice{..} renderPass = do
             , V.basePipelineHandle = V.zero
             }
     (snd <$> V.withGraphicsPipelines vdDevice V.zero [SomeStruct pipelineCreateInfo] Nothing allocate) >>= \case
-        []        -> sayErrAndExit "No Vulkan Graphics Pipelines found"
+        []        -> logAndExitWith def Error "No Vulkan Graphics Pipelines found"
         pipelines -> pure $ Vec.head pipelines
 

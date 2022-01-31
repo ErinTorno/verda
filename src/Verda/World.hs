@@ -28,7 +28,7 @@ type VerdaWorld w m = ReadWriteEach w m
     -- Verda.Event
     , ControlState, CursorMotionState
     -- Verda.Graphics
-    , Camera, ClearColor, RenderPosition, RenderTime, TargetRefreshRate, Tint, WindowResolution
+    , Camera, ClearColor, LoadIcon, RenderPosition, RenderTime, TargetRefreshRate, Tint, Window, WindowResolution
     -- Verda.Util
     , Logger
     ]
@@ -42,7 +42,7 @@ verdaWorldNames =
    -- Verda.Event
    , ''ControlState, ''CursorMotionState
    -- Verda.Graphics
-   , ''Camera, ''ClearColor, ''RenderPosition, ''RenderTime, ''TargetRefreshRate, ''Tint, ''WindowResolution
+   , ''Camera, ''ClearColor, ''LoadIcon, ''RenderPosition, ''RenderTime, ''TargetRefreshRate, ''Tint, ''Window, ''WindowResolution
     -- Verda.Util
    , ''Logger
    ]

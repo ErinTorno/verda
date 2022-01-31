@@ -8,8 +8,8 @@ import qualified Data.Vector                  as Vec
 import qualified Vulkan.Core10                as V
 import qualified Vulkan.Zero                  as V
 
-import           Verda.Graphics.Vulkan.Device   (VulkanDevice(..))
 import           Verda.Graphics.Vulkan.Internal (allocate)
+import           Verda.Graphics.Vulkan.Types
 
 maxVertexCount :: Num a => a
 maxVertexCount = 10000

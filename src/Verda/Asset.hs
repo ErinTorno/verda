@@ -19,6 +19,7 @@ module Verda.Asset
     -- Bundle
     , module Verda.Asset.Bundle
     -- Internal
+    , assetOrStatus
     , assetStatus
     , awaitHandle
     , emptyAssets

@@ -8,11 +8,11 @@ import           Verda.Util.Container
 spec :: Spec
 spec =
     context "Verda.Util.Container" $ do
-        insideOutTest
+        insideOutSpec
 
-insideOutTest :: Spec 
-insideOutTest =
-    describe "insideOutTest" $ do
+insideOutSpec :: Spec 
+insideOutSpec =
+    context "insideOut" $ do
         it "should return an empty map when given" $
             insideOut (Map.empty @Int @Char) `shouldBe` Map.empty
         it "should return a map of values to keys" $

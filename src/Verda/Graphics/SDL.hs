@@ -12,7 +12,11 @@ import qualified SDL.Raw.Error          as SDL.Raw
 import qualified SDL.Raw.Types          as SDL.Raw
 import qualified SDL.Raw.Video          as SDL.Raw
 
+import           Verda.Graphics.Texture
 import           Verda.Util.Logger
+
+setWindowIcon :: MonadIO m => SDL.Window -> Icon -> m ()
+setWindowIcon (SDL.Window window) (Icon (SDL.Surface surPtr _)) = SDL.Raw.setWindowIcon window surPtr
 
 getDisplayModeRefreshRate :: MonadIO m => Logger -> Float -> SDL.Window -> m Float
 getDisplayModeRefreshRate logger defRate (SDL.Window winPtr) = liftIO $ do

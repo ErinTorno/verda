@@ -18,15 +18,14 @@ import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Vector             as Vec
 import qualified Data.Vector.Mutable     as MVec
-import           Say
 import qualified System.FilePath         as FP
 import qualified System.FSNotify         as FSNotify
 import           Type.Reflection
 
 import qualified Verda.Asset.Path        as Path
 import           Verda.Asset.Types
-import           Verda.Util.Container    (growIfNeeded)
-import           Verda.Util.Error        (sayErrAndExit)
+import           Verda.Util.Container    (growByReplicateIfNeeded)
+import           Verda.Util.Logger
 
 ------------
 -- Assets --
@@ -35,8 +34,8 @@ import           Verda.Util.Error        (sayErrAndExit)
 emptyAssets :: MonadIO m => AssetSettings -> m Assets
 emptyAssets settings = liftIO $ Assets settings Map.empty Map.empty
     <$> newMVar 0
-    <*> (newMVar =<< MVec.new len)
-    <*> (newMVar =<< MVec.new len)
+    <*> (newMVar =<< MVec.replicate len Nothing)
+    <*> (newMVar =<< MVec.replicate len NotLoaded)
     <*> (newMVar =<< stToIO (HT.newSized len))
     <*> newMVar Seq.empty
     <*> newMVar Seq.empty
@@ -49,10 +48,10 @@ emptyAssets settings = liftIO $ Assets settings Map.empty Map.empty
 
 -- | Associates a new AssetLoader with the Assets
 -- | AssetLoaders with conflicting extensions will favor the most recently added AssetLoader
-insertAssetLoader :: (a `CanLoad` r, Typeable a, Typeable r) => a r -> Assets -> Assets
-insertAssetLoader loader assets@Assets{..} = assets {assetLoaders = Map.union newMap assetLoaders }
+insertAssetLoader :: (a `CanLoad` r, Typeable r) => a r -> Assets -> Assets
+insertAssetLoader loader assets@Assets{..} = assets {assetLoaders = Map.unionWith (<>) newMap assetLoaders }
     where exts        = extensions proxy
-          newMap      = Map.fromSet (const (Loader (someTypeRep proxy) (isSingleThreadOnly proxy) loadfn)) exts
+          newMap      = Map.fromSet (const [Loader (someTypeRep loader) (isSingleThreadOnly proxy) loadfn]) exts
           loadfn      = mkDyn proxy (loadAsset proxy)
           mkDyn :: Typeable r => Proxy (a r) -> AssetLoadFn r -> AssetLoadFn Dynamic
           mkDyn _ f = let d (HandleAlias h)   = HandleAlias $ coerceHandle h
@@ -71,18 +70,18 @@ insertLoaderResource val assets@Assets{..} = assets {loaderResources = Map.inser
 
 -- Internal --
 
-assocPathWithHandle :: MonadIO m => Path -> Handle a -> Assets -> m ()
+assocPathWithHandle :: (MonadIO m, Typeable a) => Path -> Handle a -> Assets -> m ()
 assocPathWithHandle path handle Assets{..} = liftIO $ do
     handlesMap <- takeMVar handlesByPath
-    stToIO $ HT.insert handlesMap path (coerceHandle handle)
+    stToIO $ HT.insert handlesMap (someTypeRep handle, path) (coerceHandle handle)
     putMVar handlesByPath handlesMap
 
 nextHandleIdx :: MonadIO m => Assets -> m Int
 nextHandleIdx Assets{..} = liftIO $ do
     nextID <- modifyMVar nextHandleID $ \i -> pure (i + 1, i)
     -- grow the vectors if necessary
-    takeMVar assetStatuses >>= growIfNeeded nextID 16 >>= putMVar assetStatuses
-    takeMVar loadedAssets  >>= growIfNeeded nextID 16 >>= putMVar loadedAssets
+    takeMVar assetStatuses >>= growByReplicateIfNeeded nextID 16 NotLoaded >>= putMVar assetStatuses
+    takeMVar loadedAssets  >>= growByReplicateIfNeeded nextID 16 Nothing   >>= putMVar loadedAssets
     pure nextID
 
 writeAsset :: MonadIO m => Int -> Maybe Dynamic -> Assets -> m ()
@@ -181,22 +180,29 @@ readAssetFileBytes Assets{..} = readAssetFile assetSettings . unPath . Path.addA
 coerceAssetInfo :: AssetInfo a -> AssetInfo b
 coerceAssetInfo info@AssetInfo{..} = info {assetHandle = coerceHandle assetHandle}
 
-appendToLoad :: MonadIO m => Assets -> Handle a -> Path -> m ()
+appendToLoad :: (MonadIO m, Typeable a) => Assets -> Handle a -> Path -> m ()
 appendToLoad assets@Assets{..} handle@(Handle handleID) path = liftIO $ do
     let ext        = Path.assetExtension path
-        unitHandle = coerceHandle handle
     status <- case Map.lookup ext assetLoaders of
         Nothing -> do
             let errMsg = "No loader for extension `" <> ext <> "`"
-            sayErr errMsg
             pure $ Failed $ T.unpack errMsg
-        Just Loader{..} -> do
-            let loadRow = (handleID, loadFn, AssetInfo path unitHandle)
-            modifyMVar_
-                (if isSingleThreaded then assetsToLoadSingThreaded else assetsToLoad) (pure . (|>loadRow))
-            modifyMVar_ assetsWaitingHotReloadWatching
-                (pure . (|> HotReloadRequest path unitHandle (not isSingleThreaded)))
-            pure NotLoaded
+        Just loaders ->
+            let go [] = do
+                    let msg = "No AssetLoader is capable of loading " <> show (someTypeRep handle) <> " for extension type of path " <> unPath path
+                    pure $ Failed msg
+                go (Loader{..}:rest) = do
+                    if loaderTypeRef == someTypeRep handle
+                    then do
+                        let unitHandle = coerceHandle handle
+                            loadRow    = (handleID, loadFn, AssetInfo path unitHandle)
+                        modifyMVar_
+                            (if isSingleThreaded then assetsToLoadSingThreaded else assetsToLoad) (pure . (|>loadRow))
+                        modifyMVar_ assetsWaitingHotReloadWatching
+                            (pure . (|> HotReloadRequest path unitHandle (not isSingleThreaded)))
+                        pure NotLoaded
+                    else go rest
+             in go loaders
     writeAsset handleID Nothing assets
     writeAssetStatus handleID status assets
 
@@ -223,12 +229,13 @@ withResourceMaybe action = do
         unDyn :: Typeable a => Dynamic -> LoadContext a
         unDyn r@(Dynamic rep _) = case fromDynamic r of
             Just res -> pure res
-            Nothing  -> sayErrAndExit $ T.concat [ "LoadResource was assigned to a key of the wrong type (was "
-                                                 , T.pack $ show rep
-                                                 , " but assigned as "
-                                                 , T.pack $ show key
-                                                 , "); This is a bug and should never happen"
-                                                 ]
+            Nothing  -> logAndExitWith def Error $ T.concat
+                [ "LoadResource was assigned to a key of the wrong type (was "
+                , T.pack $ show rep
+                , " but assigned as "
+                , T.pack $ show key
+                , "); This is a bug and should never happen"
+                ]
     Map.lookup key <$> asks loaderResources >>= \case
         Just res -> unDyn res >>= action key . Just
         Nothing  -> action key Nothing
@@ -290,38 +297,49 @@ assetStatus Assets{..} (Handle idx)
         then pure NotLoaded
         else liftIO $ MVec.read statuses idx
 
+assetOrStatus :: (MonadIO m, Typeable a) => Assets -> Handle a -> m (Either AssetStatus a)
+assetOrStatus assets handle = assetStatus assets handle >>= \case
+    Loaded -> getAsset assets handle >>= \case
+        Just asset -> pure $ Right asset
+        Nothing    -> let msg ="assetOrStatus: asset status was Loaded by getAsset returned Nothing for " <> T.pack (show handle)
+                       in logLineWith def Error msg >> logAndExitWith def Error msg
+    e -> pure $ Left e
+
 -- | Associates the given asset with the parent path and a label, and returns a Handle to that asset
 -- > labeled (AssetInfo "dir/file.ext") "sub" (LoadedAsset 123 Data.Vector.empty)
 labeled :: Typeable a => Path -> Text -> LoadedAsset a -> LoadContext (Handle a)
 labeled path label la@LoadedAsset{..} = do
     assets <- ask
     liftIO $ do
+        let mkHandle :: b a -> Int -> Handle a
+            mkHandle _ = Handle
         nextID <- nextHandleIdx assets
-        assocPathWithHandle (Path.addLabel label path) (Handle nextID) assets
+        assocPathWithHandle (Path.addLabel label path) (mkHandle la nextID) assets
         if Vec.null dependencies
         then do
             writeAsset       nextID (Just $ toDyn asset) assets
             writeAssetStatus nextID Loaded assets
         else do
             writeAssetStatus nextID WaitingOnDependencies assets
-            writeAsset nextID Nothing assets
             modifyMVar_ (assetsWaiting assets) (pure . (|>(nextID, Right $ la {asset = toDyn asset})))
         pure (Handle nextID)
 
 -- | Start loading an asset from the path if not already loaded, and return its handle
-loadHandle :: MonadIO m => Assets -> Path -> m (Handle a)
+loadHandle :: (MonadIO m, Typeable a) => Assets -> Path -> m (Handle a)
 loadHandle assets path = liftIO $ runReaderT (unContext $ getHandle path) assets
 
 -- | Gets a handle associated with this path
-getHandle :: Path -> LoadContext (Handle a)
+getHandle :: Typeable a => Path -> LoadContext (Handle a)
 getHandle path = getHandleWith path (\_ -> pure ())
 
 -- | Gets a handle associated with this path, running an action if its not already loaded
-getHandleWith :: Path -> (Handle a -> LoadContext ()) -> LoadContext (Handle a)
+getHandleWith :: Typeable a => Path -> (Handle a -> LoadContext ()) -> LoadContext (Handle a)
 getHandleWith path action = do
+    let mkProxy :: (Handle a -> LoadContext ()) -> Proxy a
+        mkProxy _ = Proxy
     handlesMVar <- asks handlesByPath
     handles     <- liftIO $ readMVar handlesMVar
-    (liftIO . stToIO $ HT.lookup handles path) >>= \case
+    (liftIO . stToIO $ HT.lookup handles (someTypeRep (mkProxy action), path)) >>= \case
         Just (Handle i) -> pure $ Handle i
         Nothing         -> do
             assets <- ask
@@ -366,7 +384,7 @@ ensureHotReload :: MonadIO m => Assets -> FSNotify.WatchManager -> Path -> Handl
 ensureHotReload assets@Assets{..} fsManager path handle _isMultiThread =
     liftIO $ when (useHotReloading assetSettings) $ do
         let watchDir = Path.addAssetDir (assetFolder assetSettings) (Path.assetDirectory path)
-        putStrLn ("ensureHotReload: watching " <> show (unPath path) <> " for dir " <> show (unPath watchDir))
+        logLineWith def Info ("ensureHotReload: watching " <> T.pack (show (unPath path)) <> " for dir " <> T.pack (show (unPath watchDir)))
         stopWatchings <- readMVar assetStopWatchingsByPath
         stToIO (HT.lookup stopWatchings path) >>= \case
             Just _  -> pure ()
@@ -374,6 +392,8 @@ ensureHotReload assets@Assets{..} fsManager path handle _isMultiThread =
                 let predicate = \case
                         FSNotify.Modified filePath _ _ -> FP.takeFileName filePath == Path.assetFileName path
                         _ -> False
-                    onModify _ = appendToLoad assets handle path
+                    onModify _ = do
+                        logLineWith def Info ("ensureHotReload: change detected, reloading Handle " <> T.pack (show handle))
+                        appendToLoad assets handle path
                 in do stopWatching <- FSNotify.watchDir fsManager (unPath watchDir) predicate onModify -- ignore watcher cancel action for now
                       stToIO (HT.insert stopWatchings path stopWatching)

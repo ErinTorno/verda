@@ -7,11 +7,11 @@ module Verda.Graphics.Vulkan.RenderPass
 
 import           Control.Monad.Managed
 import           Data.Bits
-import qualified Vulkan.Core10                as V
-import qualified Vulkan.Zero                  as V
+import qualified Vulkan.Core10                  as V
+import qualified Vulkan.Zero                    as V
 
-import           Verda.Graphics.Vulkan.Device   (VulkanDevice(..))
 import           Verda.Graphics.Vulkan.Internal (allocate)
+import           Verda.Graphics.Vulkan.Types
 
 createRenderPass :: VulkanDevice -> Managed V.RenderPass
 createRenderPass VulkanDevice{..} = V.withRenderPass vdDevice (V.zero {V.attachments = [attachmentDesc], V.subpasses = [subpass], V.dependencies = [subpassDep]}) Nothing allocate

@@ -13,6 +13,7 @@ spec =
         modDegreesSpec
         toHexSpec
         -- RGBA
+        desaturateRGBASpec
         rgbaBrightnessSpec
         brightestRGBASpec
         darkestRGBASpec
@@ -95,6 +96,16 @@ darkestRGBASpec =
         it "should favor blue over others" $
             darkestRGBA [rgba (Name @"red"), rgba (Name @"lime"), rgba (Name @"blue")] `shouldBe`
                 Just (rgba (Name @"blue"))
+
+desaturateRGBASpec :: Spec
+desaturateRGBASpec =
+    context "desaturateRGBA" $ do
+        it "should be id when all color components are already equal" $
+            desaturateRGBA (rgba (Name @"grey")) `shouldBe` rgba (Name @"grey")
+        it "should saturate all values the color's luminance" $
+            let luminance = floor $ rgbaLuminance (rgba (Name @"orange")) * 255
+             in desaturateRGBA (rgba (Name @"orange")) `shouldBe`
+                    mkRGB luminance luminance luminance
 
 rgbaBrightnessSpec :: Spec
 rgbaBrightnessSpec =

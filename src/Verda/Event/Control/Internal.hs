@@ -96,7 +96,7 @@ data ControlState = ControlState
     }
 
 instance Semigroup ControlState where (<>) = mappend
-instance Monoid ControlState where mempty = error "ControlState was not initialized before being used; This is a bug and should never happen"
+instance Monoid ControlState    where mempty = error "ControlState was not initialized before being used; This is a bug and should never happen"
 instance Component ControlState where type Storage ControlState = Global ControlState
 
 ---------------

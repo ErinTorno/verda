@@ -54,7 +54,7 @@ instance RGBA `ConvertTo` HSVA where
                          | otherwise = (rf - gf) / delta + 4
               -- restrict the hue to within 0 and 360
               h = modDegrees . (*60) . getHue delta $ maxcomp
-              s = if maxcomp == 0
+              s = if   maxcomp == 0
                   then 0
                   else 1 - (fromIntegral mincomp / fromIntegral maxcomp)
               v = fromWord maxcomp
@@ -103,6 +103,12 @@ toHex color = ('#':) . padHex r . padHex g . padHex b . padHex a $ ""
     where RGBA (V4 r g b a) = convert color
           padHex n = (++) . pad . showHex n $ ""
           pad s    = let len = length s in if len <= 2 then replicate (2 - len) '0' ++ s else s
+
+-- | Desaturates a color by setting all color components to its `rgbaLuminance`
+desaturateRGBA :: a `ConvertTo` RGBA => a -> RGBA
+desaturateRGBA color = RGBA $ V4 luminosity luminosity luminosity a
+    where RGBA (V4 r g b a) = convert color
+          luminosity = floor @Float @_ $ 0.299 * fromIntegral r + 0.587 * fromIntegral g + 0.114 * fromIntegral b
 
 -- | Returns the perceived brightness of an RGBA color
 -- See <https://www.w3.org/TR/AERT/#color-contrast> for each color components weight

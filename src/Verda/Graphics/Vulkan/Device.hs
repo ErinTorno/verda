@@ -5,6 +5,7 @@ module Verda.Graphics.Vulkan.Device where
 
 import           Control.Monad.Managed
 import           Data.Bits
+import           Data.Default
 import           Data.Function                (on)
 import           Data.Functor                 ((<&>))
 import           Data.Ord                     (comparing)
@@ -18,25 +19,8 @@ import qualified Vulkan.Extensions.VK_KHR_swapchain           as V.KHR
 import qualified Vulkan.Zero                  as V
 
 import           Verda.Graphics.Vulkan.Internal (allocate)
-import           Verda.Util.Error               (sayErrAndExit)
-
-data VulkanDevice = VulkanDevice
-    { vdPhysicalDevice         :: !V.PhysicalDevice
-    , vdDevice                 :: !V.Device
-    , vdSurface                :: !V.KHR.SurfaceKHR
-    , vdTotalSize              :: !Word64
-    , vdGraphicsQueue          :: !V.Queue
-    , vdGraphicsQueueFamilyIdx :: !Word32
-    , vdPresentQueue           :: !V.Queue
-    , vdPresentQueueFamilyIdx  :: !Word32
-    , vdFormat                 :: !V.Format
-    , vdSurfaceFormat          :: !V.KHR.SurfaceFormatKHR
-    , vdPresentMode            :: !V.KHR.PresentModeKHR
-    , vdSurfaceCapabilities    :: !V.KHR.SurfaceCapabilitiesKHR
-    , vdSwapChain              :: !V.KHR.SwapchainKHR
-    , vdSwapChainImageViews    :: !(Vector V.ImageView)
-    , vdExtent                 :: !V.Extent2D
-    }
+import           Verda.Graphics.Vulkan.Types
+import           Verda.Util.Logger
 
 getFormat :: MonadIO m => V.PhysicalDevice -> V.KHR.SurfaceKHR -> V.KHR.SurfaceFormatKHR -> m V.KHR.SurfaceFormatKHR
 getFormat !device !surface !preferred = fmap snd (V.KHR.getPhysicalDeviceSurfaceFormatsKHR device surface) <&> \case
@@ -83,7 +67,7 @@ createVulkanDevice :: V.Instance -> V.KHR.SurfaceKHR -> V.KHR.SurfaceFormatKHR -
 createVulkanDevice !inst !surface !preferredFormat !winW !winH =
     getBestPhysicalDevice inst surface >>= \case
         Nothing ->
-            sayErrAndExit "No suitable PhysicalDevice found"
+            logAndExitWith def Error "No suitable PhysicalDevice found"
         Just (vdTotalSize, (vdPhysicalDevice, vdGraphicsQueueFamilyIdx, vdPresentQueueFamilyIdx, vdPresentMode)) -> do
             let uniqueFamilyIndices = if vdGraphicsQueueFamilyIdx == vdPresentQueueFamilyIdx
                                     then [vdGraphicsQueueFamilyIdx]
