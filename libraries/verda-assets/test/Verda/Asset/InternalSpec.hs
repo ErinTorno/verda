@@ -4,24 +4,25 @@ module Verda.Asset.InternalSpec where
 
 import           Control.Concurrent.MVar
 import           Control.Monad.Reader
-import           Data.Text               (Text)
 import           Data.Default
 import           Data.Dynamic
 import qualified Data.Foldable           as F
+import           Data.Map.Strict         (Map)
 import qualified Data.Map.Strict         as Map
 import           Data.Sequence           (Seq((:<|)), (|>))
 import qualified Data.Sequence           as Seq
 import           Data.Set                (Set)
 import qualified Data.Set                as Set
 import qualified Data.Vector             as Vec
+import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as T
 import           Test.Hspec
+import qualified Test.HUnit              as HUnit
 
 import qualified Verda.Asset.Path        as Path
 import           Verda.Asset.Internal
 import           Verda.Asset.Types
-import           Verda.Test.Utils
 
 -----------
 -- Tests --
@@ -276,3 +277,13 @@ instance ComplexAssetLoader `CanLoad` ComplexAsset where
         simple2 <- labeled assetPath "embedded" (simpleLoaded embeddedSimpleAsset)
         pure $ LoadSuccess $ LoadedAsset { asset         = ComplexAsset {..}
                                          , dependencies  = Vec.fromList [dependency simple1, dependency simple2] }
+
+shouldSatisfyNS :: HasCallStack => a -> (a -> Bool) -> Expectation
+shouldSatisfyNS v p = unless (p v) $ HUnit.assertFailure msg
+    where msg = "predicate failed"
+
+shouldHaveMembersNS :: (HasCallStack, Foldable t, Ord k, Show k) => Map k a -> t k -> Expectation
+shouldHaveMembersNS m keys = unless (expectedSet `Set.isSubsetOf` mapKeys) (HUnit.assertFailure msg)
+    where msg         = concat ["no members ", show expectedSet, " in keys: ", show mapKeys]
+          expectedSet = Set.fromList $ F.toList keys
+          mapKeys     = Set.fromList $ Map.keys m
