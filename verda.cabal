@@ -54,10 +54,12 @@ library
                     , linear           ^>=1.21
                     , managed          ^>=1.0
                     , mtl              ^>=2.2
+                    , resourcet        ^>=1.2
                     , sdl2             ^>=2.5
                     , sdl2-image       ^>=2.0
                     , template-haskell ^>=2.16
                     , text             ^>=1.2
+                    , unliftio         ^>=0.2.20
                     , vector           ^>=0.12
                     , vector-th-unbox  ^>=0.2
                     , vulkan           ^>=3.15
@@ -84,6 +86,7 @@ library
                       Verda.Graphics.Vulkan.Internal
                       Verda.Graphics.Vulkan.RenderPass
                       Verda.Graphics.Vulkan.Shader
+                      Verda.Graphics.Vulkan.Swapchain
                       Verda.Graphics.Vulkan.Types
                       Verda.Graphics.Vulkan.Vertex
                       Verda.Graphics.Vulkan.Window
@@ -105,6 +108,7 @@ executable examples-shmup
                     , apecs            ^>=0.9
                     , data-default     ^>=0.7
                     , sdl2             ^>=2.5
+                    , text             ^>=1.2
     default-language: Haskell2010
 
 test-suite verda-test
@@ -113,6 +117,7 @@ test-suite verda-test
     main-is:          Main.hs
     other-modules:    Spec
                       Verda.AppSpec
+                      Verda.App.SystemSpec
                       Verda.Event.Control.InternalSpec
                       Verda.Graphics.ColorSpec
                       Verda.Graphics.TextureSpec

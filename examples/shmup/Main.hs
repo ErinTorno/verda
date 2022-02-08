@@ -2,17 +2,18 @@
 
 module Main where
 
-import Apecs
-import Data.Default
+import           Apecs
+import           Data.Default
+import qualified Data.Text                as T
 import qualified SDL.Input.Keyboard.Codes as SDL
 
-import Verda.App
-import Verda.Asset
-import Verda.Event.Control
-import Verda.Graphics.Color
-import Verda.Graphics.Texture
-import Verda.Util.Logger
-import Verda.World
+import           Verda.App
+import           Verda.Asset
+import           Verda.Event.Control
+import           Verda.Graphics.Color
+import           Verda.Graphics.Texture
+import           Verda.Util.Logger
+import           Verda.World
 
 -- Components --
 
@@ -52,10 +53,11 @@ main :: IO ()
 main = makeAppWith (def {assetFolder = "examples/assets", useHotReloading = True}) initExampleWorld >>= start
      . withTitle     "Example Shmup"
      . withIcon      "icon.png"
+     . withDefaultSystems
      . withStartup   Playing playingLoadAssetsStartUp
      . withStartup   Playing playingPlaceEtyStartUp
      . withSystem    Playing handleInput
-     . withDefaultSystems
+     . withSystem    Playing notifyStartSystem
      . withInitState Playing
      . withLoaderResource ScaleNearest -- for best scaling of pixel sprites, we use Nearest scaling
 
@@ -64,8 +66,8 @@ main = makeAppWith (def {assetFolder = "examples/assets", useHotReloading = True
 playerSpeedPPS :: Float
 playerSpeedPPS = 200
 
-playingLoadAssetsStartUp :: StateID -> SystemT' StartupResult
-playingLoadAssetsStartUp _stID = do
+playingLoadAssetsStartUp :: SystemT' ()
+playingLoadAssetsStartUp = do
      assets <- get global
      enemyTex        <- loadHandle assets "enemy.png" 
      enemyBulletTex  <- loadHandle assets "enemy_bullet.png" 
@@ -75,10 +77,9 @@ playingLoadAssetsStartUp _stID = do
          points   = 0
      global $= GameState{..}
      global $= ClearColor (mkRGBA 40 40 46 0)
-     pure Done
 
-playingPlaceEtyStartUp :: StateID -> SystemT' StartupResult
-playingPlaceEtyStartUp _stID = do
+playingPlaceEtyStartUp :: SystemT' StartupResult
+playingPlaceEtyStartUp = do
      GameState{..} <- get global
      assets  <- get global
      summary <- loadSetSummary assets assetSet
@@ -91,8 +92,13 @@ playingPlaceEtyStartUp _stID = do
                     pure Done
      else pure Again
 
-handleInput :: StateID -> SystemT' StateID
-handleInput stID = do
+notifyStartSystem :: SysContext StateID -> SystemT' (SysResult StateID)
+notifyStartSystem SysContext{..} = do
+     logLine Info ("notifyStartSystem: systems are being ran for state " <> T.pack (show currentState))
+     pure RemoveThis
+
+handleInput :: SystemT' ()
+handleInput = do
      Time dt _ <- get global
      input     <- get global
      whenInput input (fromScanCode SDL.ScancodeW) isPressedOrHeld $
@@ -103,4 +109,3 @@ handleInput stID = do
           cmap $ \(Player, Position x y) -> Position x (y + playerSpeedPPS * dt)
      whenInput input (fromScanCode SDL.ScancodeD) isPressedOrHeld $
           cmap $ \(Player, Position x y) -> Position (x + playerSpeedPPS * dt) y
-     pure stID

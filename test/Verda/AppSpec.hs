@@ -9,6 +9,7 @@ import           Test.Hspec
 
 import           Verda.App
 import           Verda.App.Internal
+import           Verda.App.System
 import           Verda.Test.Utils
 import           Verda.WorldSpec
 
@@ -29,14 +30,14 @@ runSystemsSpec =
         it "should run all systems for state if no startups" $ do
             sysSum <- newMVar @Int 0
             app <- makeApp initTestWorld
-               <&> withSystemForAll (\stID -> liftIO (modifyMVar_ sysSum (pure . (+1))) >> pure stID)
-                 . withSystem    MyState1 (\stID -> liftIO (modifyMVar_ sysSum (pure . (+2))) >> pure stID)
-                 . withSystem    MyState1 (\stID -> liftIO (modifyMVar_ sysSum (pure . (+4))) >> pure stID)
-                 . withSystem    MyState2 (\stID -> liftIO (modifyMVar_ sysSum (pure . (+8))) >> pure stID)
+               <&> withSystemForAll (liftIO (modifyMVar_ sysSum (pure . (+1))) >> pure @SystemT' (Continue @MyState))
+                 . withSystem    MyState1 (liftIO (modifyMVar_ sysSum (pure . (+2))) >> pure @SystemT' (Continue @MyState))
+                 . withSystem    MyState1 (liftIO (modifyMVar_ sysSum (pure . (+4))) >> pure @SystemT' (Continue @MyState))
+                 . withSystem    MyState2 (liftIO (modifyMVar_ sysSum (pure . (+8))) >> pure @SystemT' (Continue @MyState))
                  . withInitState MyState1
             testWorld <- initTestWorld
-            (stID, startups, systems) <- runWith testWorld $ runSystems app MyState1 [] (systemsFor app MyState1)
-            stID `shouldBe` MyState1
+            (history, startups, systems) <- runWith testWorld $ runSystems app (mkStateHistory MyState1) [] (systemsFor app MyState1)
+            peekState history `shouldBe` MyState1
             startups `shouldSatisfyNS` null
             length systems `shouldBe` 3
             readMVar sysSum `shouldReturn` 7
@@ -44,13 +45,13 @@ runSystemsSpec =
             startSum <- newMVar @Int 0
             sysSum   <- newMVar @Int 0
             app <- makeApp initTestWorld
-               <&> withSystem  MyState1 (\stID -> liftIO (modifyMVar_ sysSum (pure . (+123))) >> pure stID)
-                 . withStartup MyState1 (\_ -> liftIO (modifyMVar_ startSum (pure . (+1))) >> pure Done)
-                 . withStartup MyState1 (\_ -> liftIO (modifyMVar_ startSum (pure . (+2))) >> pure Again)
+               <&> withSystem  MyState1 (liftIO (modifyMVar_ sysSum (pure . (+123))) >> pure @SystemT' (Continue @MyState))
+                 . withStartup MyState1 (liftIO (modifyMVar_ startSum (pure . (+1))) >> pure @SystemT' Done)
+                 . withStartup MyState1 (liftIO (modifyMVar_ startSum (pure . (+2))) >> pure @SystemT' Again)
                  . withInitState MyState1
             testWorld <- initTestWorld
-            (stID, startups, systems) <- runWith testWorld $ runSystems app MyState1 (startupsFor app MyState1) (systemsFor app MyState1)
-            stID `shouldBe` MyState1
+            (history, startups, systems) <- runWith testWorld $ runSystems app (mkStateHistory MyState1)  (startupsFor app MyState1) (systemsFor app MyState1)
+            peekState history `shouldBe` MyState1
             length startups `shouldBe` 1
             length systems  `shouldBe` 1
             readMVar startSum `shouldReturn` 3
@@ -59,12 +60,12 @@ runSystemsSpec =
             startSum <- newMVar @Int 0
             sysSum   <- newMVar @Int 0
             app <- makeApp initTestWorld
-               <&> withSystem  MyState1 (\stID -> liftIO (modifyMVar_ sysSum (pure . (+1))) >> pure stID)
-                 . withStartup MyState1 (\_ -> liftIO (modifyMVar_ startSum (pure . (+1))) >> pure Done)
+               <&> withSystem  MyState1 (liftIO (modifyMVar_ sysSum (pure . (+1))) >> pure @SystemT' (Continue @MyState))
+                 . withStartup MyState1 (liftIO (modifyMVar_ startSum (pure . (+1))) >> pure @SystemT' Done)
                  . withInitState MyState1
             testWorld <- initTestWorld
-            (stID, startups, systems) <- runWith testWorld $ runSystems app MyState1 (startupsFor app MyState1) (systemsFor app MyState1)
-            stID `shouldBe` MyState1
+            (history, startups, systems) <- runWith testWorld $ runSystems app (mkStateHistory MyState1)  (startupsFor app MyState1) (systemsFor app MyState1)
+            peekState history `shouldBe` MyState1
             length startups `shouldBe` 0
             length systems  `shouldBe` 1
             readMVar startSum `shouldReturn` 1
@@ -82,26 +83,27 @@ withDefaultSystemsSpec =
             App{..} <- makeApp initTestWorld
                    <&> withDefaultSystems
             counts appStartups   `shouldBe` Map.empty
-            counts appSystems    `shouldBe` Map.singleton ForAnyState 1
+            counts appSystems    `shouldBe` Map.singleton InBackground 1
             counts appFinalizers `shouldBe` Map.empty
         it "should use newly added and defaults in a chain" $ do
             App{..} <- makeApp initTestWorld
-                   <&> withStartup MyState1 (\_ -> pure Done)
-                     . withSystem  MyState2 pure
-                     . withSystemForAll     pure
-                     . withFinalizerForAll  (\_ -> pure ())
+                   <&> withStartup MyState1 (pure @SystemT' Done)
+                     . withSystem  MyState2 (pure @SystemT' (Continue @MyState))
+                     . withSystemForAll     (pure @SystemT' (Continue @MyState))
+                     . withFinalizerForAll  (pure @SystemT' ())
                      . withDefaultSystems
                      . withInitState MyState1
             counts appStartups   `shouldBe` Map.singleton (ForState MyState1) 1
-            counts appSystems    `shouldBe` Map.fromList [(ForAnyState, 2), (ForState MyState2, 1)]
+            counts appSystems    `shouldBe` Map.fromList [(ForAnyState, 1), (ForState MyState2, 1), (InBackground, 1)]
             counts appFinalizers `shouldBe` Map.singleton ForAnyState 1
 
 withAnyForLifetimeSpec
+    -- :: IsSystem a TestWorld MyState r
     :: String
     -> String
-    -> (App TestWorld MyState -> Map (StateLifetime MyState) [MyState -> SystemT' a])
-    -> (MyState -> SystemT' a)
-    -> (StateLifetime MyState -> (MyState -> SystemT' a) -> App TestWorld MyState -> App TestWorld MyState)
+    -> (App TestWorld MyState -> Map (StateLifetime MyState) [SysContext s -> SystemT TestWorld IO r])
+    -> a
+    -> (StateLifetime MyState -> a -> App TestWorld MyState -> App TestWorld MyState)
     -> Spec
 withAnyForLifetimeSpec label name getter dummy withSys =
     context label $ do
@@ -132,10 +134,10 @@ withAnyForLifetimeSpec label name getter dummy withSys =
                 Map.fromList [(ForState MyState1, 2), (ForState MyState2, 2), (ForAnyState , 2)]
 
 withStartupForLifetimeSpec :: Spec
-withStartupForLifetimeSpec = withAnyForLifetimeSpec "withStartupForLifetime" "startup" appStartups (\_ -> pure Done) withStartupForLifetime
+withStartupForLifetimeSpec = withAnyForLifetimeSpec "withStartupForLifetime" "startup" appStartups (pure @SystemT' ()) withStartupForLifetime
 
 withSystemForLifetimeSpec :: Spec
-withSystemForLifetimeSpec = withAnyForLifetimeSpec "withSystemForLifetime" "startup" appSystems pure withSystemForLifetime
+withSystemForLifetimeSpec = withAnyForLifetimeSpec "withSystemForLifetime" "startup" appSystems (pure @SystemT' ()) withSystemForLifetime
 
 withFinalizerForLifetimeSpec :: Spec
-withFinalizerForLifetimeSpec = withAnyForLifetimeSpec "withFinalizerForLifetime" "finalizer" appFinalizers (\_ -> pure ()) withFinalizerForLifetime
+withFinalizerForLifetimeSpec = withAnyForLifetimeSpec "withFinalizerForLifetime" "finalizer" appFinalizers (pure @SystemT' ()) withFinalizerForLifetime

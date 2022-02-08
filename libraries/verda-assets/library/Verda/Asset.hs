@@ -28,6 +28,7 @@ module Verda.Asset
     , getHandle
     , insertAssetLoader
     , insertLoaderResource
+    , insertLoaderResourceM
     , isValid
     , labeled
     , loadHandle

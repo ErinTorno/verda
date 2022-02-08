@@ -32,7 +32,7 @@ import           Verda.Util.Logger
 ------------
 
 emptyAssets :: MonadIO m => AssetSettings -> m Assets
-emptyAssets settings = liftIO $ Assets settings Map.empty Map.empty
+emptyAssets settings = liftIO $ Assets settings Map.empty Map.empty Map.empty
     <$> newMVar 0
     <*> (newMVar =<< MVec.replicate len Nothing)
     <*> (newMVar =<< MVec.replicate len NotLoaded)
@@ -51,7 +51,7 @@ emptyAssets settings = liftIO $ Assets settings Map.empty Map.empty
 insertAssetLoader :: (a `CanLoad` r, Typeable r) => a r -> Assets -> Assets
 insertAssetLoader loader assets@Assets{..} = assets {assetLoaders = Map.unionWith (<>) newMap assetLoaders }
     where exts        = extensions proxy
-          newMap      = Map.fromSet (const [Loader (someTypeRep loader) (isSingleThreadOnly proxy) loadfn]) exts
+          newMap      = Map.fromSet (const [LoaderInstance (someTypeRep loader) (isSingleThreadOnly proxy) loadfn]) exts
           loadfn      = mkDyn proxy (loadAsset proxy)
           mkDyn :: Typeable r => Proxy (a r) -> AssetLoadFn r -> AssetLoadFn Dynamic
           mkDyn _ f = let d (HandleAlias h)   = HandleAlias $ coerceHandle h
@@ -66,6 +66,12 @@ insertLoaderResource :: Typeable a => a -> Assets -> Assets
 insertLoaderResource val assets@Assets{..} = assets {loaderResources = Map.insert key (toDyn val) loaderResources}
     where key     = someTypeRep $ mkProxy val
           mkProxy :: a -> Proxy a
+          mkProxy = const Proxy
+
+insertLoaderResourceM :: Typeable a => IO a -> Assets -> Assets
+insertLoaderResourceM action assets@Assets{..} = assets {loaderResourcesM = Map.insert key (toDyn <$> action) loaderResourcesM}
+    where key     = someTypeRep $ mkProxy action
+          mkProxy :: m a -> Proxy a
           mkProxy = const Proxy
 
 -- Internal --
@@ -147,22 +153,28 @@ updateWaiting assets@Assets{..} = liftIO $ do
             else
                 modifyMVar_ assetsWaiting (pure . (|>(idx, Right la)))
 
-forkAssetLoader :: MonadIO m => Assets -> m ThreadId
-forkAssetLoader assets@Assets{..} = liftIO . forkIO . FSNotify.withManager $ \fsManager -> forever $ do
-    toLoad <- modifyMVar assetsToLoad (pure . (Seq.empty,))
-    -- Run loaders
-    let proc idx load info@AssetInfo{..} = do
-            bytes  <- readAssetFileBytes assets assetPath
-            result <- runReaderT (unContext $ load (coerceAssetInfo info) bytes) assets
-            handleLoadResult idx result assets
-        markFail idx (e :: SomeException) = writeAssetStatus idx (Failed $ show e) assets
-    forM_ toLoad $ \(idx, load, info) ->
-        void (forkIO $ proc idx load info) `catch` markFail idx
-    toWatch <- modifyMVar assetsWaitingHotReloadWatching (pure . (Seq.empty,))
-    forM_ toWatch $ \(HotReloadRequest path handle isMultiThreadSafe) ->
-        ensureHotReload assets fsManager path handle isMultiThreadSafe
-    updateWaiting assets
-    liftIO $ threadDelay (threadDelayMS assetSettings)
+forkAssetLoader :: MonadIO m => Assets -> m (ThreadId, Assets)
+forkAssetLoader initAssets = do
+    let initResource = loaderResources initAssets
+    initResourceM <- liftIO $ Map.foldlWithKey (\accM k action -> action >>= \a -> Map.insert k a <$> accM) (pure Map.empty) (loaderResourcesM initAssets)
+    let assets@Assets{..} = initAssets
+            { loaderResources  = Map.union initResourceM initResource
+            , loaderResourcesM = Map.empty }
+    liftIO . fmap (,assets) . forkIO . FSNotify.withManager $ \fsManager -> forever $ do
+        toLoad <- modifyMVar assetsToLoad (pure . (Seq.empty,))
+        -- Run loaders
+        let proc idx load info@AssetInfo{..} = do
+                bytes  <- readAssetFileBytes assets assetPath
+                result <- runReaderT (unContext $ load (coerceAssetInfo info) bytes) assets
+                handleLoadResult idx result assets
+            markFail idx (e :: SomeException) = writeAssetStatus idx (Failed $ show e) assets
+        forM_ toLoad $ \(idx, load, info) ->
+            void (forkIO $ proc idx load info) `catch` markFail idx
+        toWatch <- modifyMVar assetsWaitingHotReloadWatching (pure . (Seq.empty,))
+        forM_ toWatch $ \(HotReloadRequest path handle isMultiThreadSafe) ->
+            ensureHotReload assets fsManager path handle isMultiThreadSafe
+        updateWaiting assets
+        liftIO $ threadDelay (threadDelayMS assetSettings)
 
 updateSingleThreaded :: MonadIO m => Assets -> m ()
 updateSingleThreaded assets@Assets{..} = liftIO $ do
@@ -191,7 +203,7 @@ appendToLoad assets@Assets{..} handle@(Handle handleID) path = liftIO $ do
             let go [] = do
                     let msg = "No AssetLoader is capable of loading " <> show (someTypeRep handle) <> " for extension type of path " <> unPath path
                     pure $ Failed msg
-                go (Loader{..}:rest) = do
+                go (LoaderInstance{..}:rest) = do
                     if loaderTypeRef == someTypeRep handle
                     then do
                         let unitHandle = coerceHandle handle

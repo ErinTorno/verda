@@ -6,13 +6,14 @@ module Verda.Graphics.Texture
     , Texture(..)
     , TextureConfig(..)
     , TextureLoader(..)
-    , TextureScaleQualityOverrides(..)
-    , mkTextureScaleQualityOverrides
+    , TextureScaleQualityOverrides
+    , textureBundle
     ) where
 
 import           Control.Monad.Reader
 import           Control.Monad.ST             (RealWorld, stToIO)
 import           Data.ByteString              (ByteString)
+import           Data.Default
 import           Data.Dynamic
 import           Data.HashTable.ST.Basic      (HashTable)
 import qualified Data.HashTable.ST.Basic      as HT
@@ -34,6 +35,9 @@ validExtensions :: Set Text
 validExtensions = ["bmp", "cur", "gif", "ico", "jpg", "jpeg", "lbm", "png", "pnm", "pcx", "svg", "tga", "tif", "tiff", "webp", "xpm", "xv", "tex.dhall"]
 
 data ScaleQuality = ScaleNearest | ScaleLinear | ScaleAnistropic deriving (Enum, Eq, Generic, Ord, Read, Show)
+
+instance Default ScaleQuality where def = ScaleLinear
+
 instance Dhall.FromDhall ScaleQuality where
     autoWith _ = Dhall.genericAutoWith (Dhall.defaultInterpretOptions {Dhall.constructorModifier = \n -> fromMaybe n $ T.stripPrefix "Scale" n})
 
@@ -47,8 +51,8 @@ data Image
 
 newtype TextureScaleQualityOverrides = TextureScaleQualityOverrides (HashTable RealWorld (Handle Image) ScaleQuality)
 
-mkTextureScaleQualityOverrides :: MonadIO m => m TextureScaleQualityOverrides
-mkTextureScaleQualityOverrides = fmap TextureScaleQualityOverrides $ liftIO $ stToIO HT.new
+instance ResourceGenerator TextureScaleQualityOverrides where
+    genResource = TextureScaleQualityOverrides <$> stToIO HT.new
 
 data TextureConfig = TextureConfig
     { file         :: !Path
@@ -60,7 +64,16 @@ newtype Icon = Icon {unIcon :: SDL.Surface}
 
 newtype Texture = Texture {unTexture :: SDL.Texture}
 
-data TextureLoader r = TextureLoader
+data TextureLoader r = TextureLoader deriving (Eq, Ord, Generic, Read, Show)
+
+instance Default (TextureLoader r) where def = TextureLoader
+
+textureBundle :: Bundled [ Resource  ScaleQuality
+                         , ResourceM TextureScaleQualityOverrides
+                         , Loader    (TextureLoader Icon)
+                         , Loader    (TextureLoader Texture)
+                         ]
+textureBundle = BundledProxy
 
 instance TextureLoader `CanLoad` Icon where
     extensions _ = validExtensions

@@ -36,6 +36,7 @@ import           Verda.Graphics.Vulkan.Device           (createVulkanDevice)
 import           Verda.Graphics.Vulkan.GraphicsPipeline (createGraphicsPipeline)
 import           Verda.Graphics.Vulkan.Internal         (allocate)
 import           Verda.Graphics.Vulkan.RenderPass       (createRenderPass)
+-- import           Verda.Graphics.Vulkan.Swapchain
 import           Verda.Graphics.Vulkan.Types
 import           Verda.Graphics.Vulkan.Vertex           (createVertexBuffer)
 import           Verda.Util.Logger
@@ -50,7 +51,12 @@ run winCreateInfo loop = do
     SDL.showWindow vwSDLWindow
     frameState <- liftIO $ newIORef 0
     windowIORef <- liftIO $ newIORef window
-    liftIO $ loop windowIORef (drawFrame winCreateInfo windowIORef frameState)
+    liftIO $ loop windowIORef $ do 
+        drawFrame winCreateInfo windowIORef frameState
+    -- liftIO $ loop windowIORef $ 
+    --     shouldRemakeSwapchain (drawFrame winCreateInfo windowIORef frameState) >>= \case
+    --         True  -> logAndExitWith def Error "run: should create swapchain is True, but remaking is unsupported"
+    --         False -> pure ()
     V.deviceWaitIdle (vdDevice vwDevice)
 
 withSDL :: Managed ()
@@ -141,11 +147,13 @@ drawFrame winCreateInfo windowIORef ioref = do
     let VulkanDevice{..}    = vwDevice
         imageAvailSemaphore = vwImageAvailableSemaphores Vec.! iaSemaIdx
     (result, imgIdx) <- V.KHR.acquireNextImageKHR vdDevice vdSwapChain maxBound imageAvailSemaphore V.zero
-    if result == V.ERROR_OUT_OF_DATE_KHR || result == V.ERROR_OUT_OF_DATE_KHR 
-    then do
-        liftIO $ putStrLn "remaking window and continuing"
-        window' <- withVulkanWindow winCreateInfo
-        liftIO $ writeIORef windowIORef window'
+    let resetSwapchains = do
+            liftIO $ putStrLn "drawFrame: ERROR_OUT_OF_DATE_KHR remaking window and continuing"
+            V.deviceWaitIdle vdDevice
+            window' <- withVulkanWindow winCreateInfo
+            liftIO $ writeIORef windowIORef window'
+    if result == V.ERROR_OUT_OF_DATE_KHR
+    then resetSwapchains
     else do
         let submitInfo = V.zero
                 { V.waitSemaphores   = [imageAvailSemaphore]
@@ -159,9 +167,11 @@ drawFrame winCreateInfo windowIORef ioref = do
                 , V.KHR.imageIndices   = [imgIdx]
                 }
         V.queueSubmit vdGraphicsQueue [SomeStruct submitInfo] V.zero 
-        void $ V.KHR.queuePresentKHR vdPresentQueue presentInfo
-        V.queueWaitIdle vdPresentQueue
-        liftIO $ writeIORef ioref ((iaSemaIdx + 1) `mod` maxFramesInFlight)
+        V.KHR.queuePresentKHR vdPresentQueue presentInfo >>= \case
+            V.ERROR_OUT_OF_DATE_KHR -> resetSwapchains
+            _ -> do
+                V.queueWaitIdle vdPresentQueue
+                liftIO $ writeIORef ioref ((iaSemaIdx + 1) `mod` maxFramesInFlight)
 
 getDisplayModeRefreshRate :: VulkanWindow -> Logger -> IO Float
 getDisplayModeRefreshRate VulkanWindow{..} logger =

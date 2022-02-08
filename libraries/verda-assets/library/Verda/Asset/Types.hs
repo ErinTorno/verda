@@ -73,7 +73,7 @@ instance Default AssetSettings where
         , useHotReloading = False
         }
 
-data Loader = Loader
+data LoaderInstance = LoaderInstance
     { loaderTypeRef    :: !SomeTypeRep
     , isSingleThreaded :: !Bool
     , loadFn           :: !(AssetLoadFn Dynamic)
@@ -82,10 +82,12 @@ data Loader = Loader
 data Assets = Assets
     { assetSettings            :: !AssetSettings
     -- ^ The settings to use when loading assets
-    , assetLoaders             :: !(Map Text [Loader])
+    , assetLoaders             :: !(Map Text [LoaderInstance])
     -- ^ A map of extensions to functions that can load that type of asset
     , loaderResources          :: !(Map SomeTypeRep Dynamic)
     -- ^ A map of SomeTypeReps to values that can be accessed by AssetLoaders
+    , loaderResourcesM         :: !(Map SomeTypeRep (IO Dynamic))
+    -- ^ As `loaderResources`, except these operate in the `IO` monad and are initialized immediately before loading
     , nextHandleID             :: !(MVar Int)
     -- ^ A counter of unique Handle IDs, starting at 0
     , loadedAssets             :: !(MVar (IOVector (Maybe Dynamic)))
@@ -137,10 +139,10 @@ type AssetLoadFn a = AssetInfo a -> ByteString -> LoadContext (LoadResult a)
 
 class a `CanLoad` r where
     -- | True if asset can only be loaded in a singlethreaded environment
-    isSingleThreadOnly :: Proxy (a r) -> Bool
+    isSingleThreadOnly :: proxy (a r) -> Bool
     isSingleThreadOnly _ = False
-    extensions :: Proxy (a r) -> Set Text
-    loadAsset  :: Proxy (a r) -> AssetLoadFn r
+    extensions :: proxy (a r) -> Set Text
+    loadAsset  :: proxy (a r) -> AssetLoadFn r
 
 newtype LoadSetElement = LoadSetElement {unLoadSetElement :: Handle ()} deriving (Eq, Generic, Ord, Read, Show)
 

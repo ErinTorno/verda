@@ -1,12 +1,15 @@
 
 module Verda.Graphics.Vulkan.Types where
 
+import           Control.Monad.Reader
+import           Control.Monad.Trans.Resource
 import           Data.Text                    (Text)
 import           Data.Vector                  (Vector)
 import           Data.Word
 import qualified SDL
+import           UnliftIO
 import qualified Vulkan.Core10                as V
-import qualified Vulkan.Extensions                            as V.KHR
+import qualified Vulkan.Extensions            as V.KHR
 
 import           Verda.Util.Logger
 
@@ -46,3 +49,10 @@ data VulkanWindow = VulkanWindow
     , vwRenderFinishedSemaphore  :: !V.Semaphore
     , vwVertexBuffer             :: !V.Buffer
     }
+
+newtype VulkanT a = VulkanT {unVulkanT :: ReaderT VulkanWindow (ResourceT IO) a}
+    deriving (Functor, Applicative, Monad, MonadIO, MonadResource)
+
+instance MonadUnliftIO VulkanT where
+    withRunInIO action = VulkanT $ withRunInIO $ \r ->
+        action (r . unVulkanT)

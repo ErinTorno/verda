@@ -3,6 +3,7 @@ module Verda.Graphics.TextureSpec where
 import           Control.Monad.Reader
 import qualified Data.ByteString         as BS
 import           Data.Default
+import           Data.Functor
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Vector             as Vec
@@ -79,10 +80,9 @@ withImports :: Text -> Text
 withImports expr = "let Texture = ./assets/dhall/texture.dhall in " `T.append` expr
 
 mkAssets :: SDL.Renderer -> IO Assets
-mkAssets renderer = do
-    texQualOverrides <- mkTextureScaleQualityOverrides
-    insertLoaderResource renderer . insertLoaderResource ScaleLinear . insertLoaderResource texQualOverrides . insertAssetLoader (TextureLoader @Texture)
-        <$> emptyAssets def
+mkAssets renderer = emptyAssets def
+                <&> insertLoaderResource renderer
+                  . insertBundle textureBundle
 
 withRenderer :: (SDL.Renderer -> IO a) -> IO a
 withRenderer action = do

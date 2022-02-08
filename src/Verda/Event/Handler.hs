@@ -48,7 +48,7 @@ handleEvent controlSt scale event =
             motionState <- get global
             global      $= motionState { cursorScreenPosition = pos
                                        , cursorPosition       = scale * (fromIntegral <$> pos)
-                                       , cursorMovement       = scale * (fromIntegral <$> relPos)}
+                                       , cursorMovement       = scale * (fromIntegral <$> relPos) }
         -- sets mouse's scrolling amount
         SDL.MouseWheelEvent SDL.MouseWheelEventData{SDL.mouseWheelEventPos = V2 _ y, SDL.mouseWheelEventDirection = dir} -> do
             motionState <- get global
